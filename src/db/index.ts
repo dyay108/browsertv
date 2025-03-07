@@ -976,6 +976,33 @@ export class IPTVDatabase extends Dexie {
       return {results: [], total: 0};
     }
   }
+  async updateExistingPlaylist(
+    id: number,
+    content: string,
+    name: string,
+    url?: string
+  ): Promise<number> {
+    console.log(`Updating existing playlist #${id}: ${name}`);
+    
+    // Update the playlist entry
+    await this.playlists.update(id, {
+      name,
+      content,
+      lastUsed: new Date(),
+      url
+    });
+    
+    // Process the content - this will clear existing data and add new data
+    await this.parseM3UContent(content, id);
+    
+    // Return the ID that was updated
+    return id;
+  };
+
+  async getPlaylistName(id: number) {
+    const playlist = await this.playlists.get(id);
+    return playlist?.name
+  }
 }
 
 // Create a database instance
