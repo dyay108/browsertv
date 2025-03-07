@@ -298,8 +298,10 @@ export function usePlaylistManagement(): PlaylistHookResult {
 
       // Process the content
       await processM3UContent(content, name, playlistId);
+      setIsUpdating(false);
 
     } catch (error) {
+      setIsUpdating(false);
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
