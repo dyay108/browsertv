@@ -4,7 +4,7 @@ services:
   # Web IPTV application
   browsertv:
     # Use pre-built image from Docker Hub
-    image: YOUR_DOCKERHUB_USERNAME/browsertv:latest
+    image: dyay108/browsertv:latest
     # Or build from local Dockerfile
     # build: .
     container_name: browsertv-app
