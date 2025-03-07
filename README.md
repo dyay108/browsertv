@@ -3,6 +3,17 @@
 A modern React application that allows you to play IPTV streams directly in your browser. Load M3U playlists, organize channels into groups, mark favorites, and play content with an advanced multi-engine player.
 Hosted site: [browsertv.thearchitechs.dev](https://browsertv.thearchitechs.dev/)
 
+## Application Screenshots
+
+![Player View Group List](screenshots/group_list.png)
+*Player view*
+
+![Player View Channel List](screenshots/channel_list.png)
+*Player view*
+
+![Upload View](screenshots/start.png)
+*Start page*
+
 ## Features
 
 - **Playlist Management**
