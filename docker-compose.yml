@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  browsertv-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    # Add healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+    # Mount volumes for development if needed
+    # volumes:
+    #   - ./src:/app/src

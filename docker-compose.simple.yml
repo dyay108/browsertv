@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  # Web IPTV application
+  browsertv:
+    # Use pre-built image from Docker Hub
+    image: YOUR_DOCKERHUB_USERNAME/browsertv:latest
+    # Or build from local Dockerfile
+    # build: .
+    container_name: browsertv-app
+    restart: unless-stopped
+    ports:
+      - "8080:80"  # Map port 8080 on host to 80 in container
+    environment:
+      - TZ=UTC  # Set timezone
+    # Health check to monitor container health
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
