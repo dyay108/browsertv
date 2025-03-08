@@ -384,7 +384,24 @@
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-sizing: border-box;
-  overflow: hidden;
+  max-height: 85vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2196F3 rgba(255, 255, 255, 0.05);
+}
+
+.m3u-upload-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.m3u-upload-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.m3u-upload-container::-webkit-scrollbar-thumb {
+  background-color: #2196F3;
+  border-radius: 4px;
 }
 
 .file-upload-wrapper {
