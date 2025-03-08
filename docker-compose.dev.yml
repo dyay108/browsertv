@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  frontend-dev:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_POCKETBASE_URL=http://localhost:8090
+      - REACT_APP_API_URL=http://localhost:3001
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true  # Helps with hot reload in some environments
+    command: >
+      sh -c "npm install &&
+             npm start"
+  
+  pocketbase-dev:
+    image: alpine:latest
+    working_dir: /pb
+    volumes:
+      - ./setup-collections.js:/pb/setup-collections.js:ro 
+      - ./pb_data:/pb/pb_data 
+      - ./node_modules:/pb/node_modules 
+      - ./:/pb
+    ports:
+      - "8090:8090"
+    environment:
+      - ADMIN_EMAIL=dd@dd.com
+      - ADMIN_PASSWORD=1234567890
+    command: sh /pb/init-pocketbase.sh
+
+  api-dev:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+    ports:
+      - "3001:3001"
+    environment:
+      - POCKETBASE_URL=http://pocketbase-dev:8090
+      - NODE_ENV=development
+    command: >
+      sh -c "npm install &&
+             npm install -g nodemon &&
+             nodemon api/server.js"
+    depends_on:
+      - pocketbase-dev
