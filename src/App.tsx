@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import NotFound from './components/common/NotFound';
 
 /**
  * Main App component that serves as the application root
@@ -31,6 +32,9 @@ function App() {
             
             {/* Redirect root to playlists or login based on auth status */}
             <Route path="/" element={<Navigate to="/playlists" />} />
+            
+            {/* 404 Page for undefined routes */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </AuthProvider>

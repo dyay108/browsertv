@@ -3,6 +3,8 @@ import { IChannel, db } from '../../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { usePlaylistManagement } from '../../hooks/usePlaylistManagement';
 import { useStreamControl } from '../../hooks/useStreamControl';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 import PlaylistUploader from './PlaylistUploader';
 import UrlPlaylistLoader from './UrlPlaylistLoader';
@@ -14,6 +16,14 @@ import PlaylistViewer from './PlaylistViewer';
  * Main component that manages playlist selection, file upload, and URL loading
  */
 const PlaylistManager: React.FC = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   // State for overall app flow
   const [isFileUploaded, setIsFileUploaded] = useState(false);
   const [isDirectStreamMode, setIsDirectStreamMode] = useState(false);
@@ -117,7 +127,21 @@ const PlaylistManager: React.FC = () => {
         // Upload/Main View
         <div className="upload-layout">
           <div className="m3u-upload-container">
-            <h2>BrowserTV</h2>
+            <div className="header-with-logout">
+              <h2>BrowserTV</h2>
+              <button 
+                onClick={handleLogout}
+                className="upload-logout-button"
+                title="Logout"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                Logout
+              </button>
+            </div>
 
             <RecentPlaylists 
               playlists={recentPlaylists}

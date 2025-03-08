@@ -34,7 +34,7 @@ const Register: React.FC = () => {
 
   return (
     <div className="register-container">
-      <h2>Register for IPTV Manager</h2>
+      <h2>Register for BrowserTV</h2>
       {error && <div className="error-message">{error}</div>}
       <form onSubmit={handleSubmit}>
         <div className="form-group">

@@ -27,7 +27,7 @@ const Login: React.FC = () => {
 
   return (
     <div className="login-container">
-      <h2>Login to IPTV Manager</h2>
+      <h2>Login to BrowserTV</h2>
       {error && <div className="error-message">{error}</div>}
       <form onSubmit={handleSubmit}>
         <div className="form-group">
