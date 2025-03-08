@@ -12,7 +12,6 @@ const pb = new PocketBase(PB_URL);
 
 // Collection definitions
 const collections = [
-  // Your existing collection definitions
   {
     name: "playlists",
     schema: [
