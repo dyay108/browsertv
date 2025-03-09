@@ -10,7 +10,7 @@ const adminPassword = process.env.ADMIN_PASSWORD || '1234567890';
 // Initialize PocketBase client
 const pb = new PocketBase(PB_URL);
 
-// Collection definitions
+// Collection definitions with access rules
 const collections = [
   {
     name: "playlists",
@@ -39,7 +39,13 @@ const collections = [
           cascadeDelete: false
         }
       }
-    ]
+    ],
+    // Access rules
+    listRule: "@request.auth.id != \"\" && user.id = @request.auth.id",
+    viewRule: "@request.auth.id != \"\" && user.id = @request.auth.id",
+    createRule: "@request.auth.id != \"\"",
+    updateRule: "@request.auth.id != \"\" && user.id = @request.auth.id",
+    deleteRule: "@request.auth.id != \"\" && user.id = @request.auth.id"
   },
   {
     name: "channels",
@@ -83,7 +89,13 @@ const collections = [
           cascadeDelete: true
         }
       }
-    ]
+    ],
+    // Access rules
+    listRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    viewRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    createRule: "@request.auth.id != \"\" && @request.data.playlist:exists && @collection.playlists.getOne(@request.data.playlist).user.id = @request.auth.id",
+    updateRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    deleteRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id"
   },
   {
     name: "groups",
@@ -102,7 +114,13 @@ const collections = [
           cascadeDelete: true
         }
       }
-    ]
+    ],
+    // Access rules
+    listRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    viewRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    createRule: "@request.auth.id != \"\" && @request.data.playlist:exists && @collection.playlists.getOne(@request.data.playlist).user.id = @request.auth.id",
+    updateRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    deleteRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id"
   },
   {
     name: "channel_groups",
@@ -125,7 +143,13 @@ const collections = [
           cascadeDelete: true
         }
       }
-    ]
+    ],
+    // Access rules
+    listRule: "@request.auth.id != \"\" && (channel.playlist.user.id = @request.auth.id || group.playlist.user.id = @request.auth.id)",
+    viewRule: "@request.auth.id != \"\" && (channel.playlist.user.id = @request.auth.id || group.playlist.user.id = @request.auth.id)",
+    createRule: "@request.auth.id != \"\" && @request.data.channel:exists && @request.data.group:exists && @collection.channels.getOne(@request.data.channel).playlist.user.id = @request.auth.id && @collection.groups.getOne(@request.data.group).playlist.user.id = @request.auth.id",
+    updateRule: "@request.auth.id != \"\" && channel.playlist.user.id = @request.auth.id && group.playlist.user.id = @request.auth.id",
+    deleteRule: "@request.auth.id != \"\" && channel.playlist.user.id = @request.auth.id && group.playlist.user.id = @request.auth.id"
   },
   {
     name: "favorites",
@@ -157,7 +181,13 @@ const collections = [
           cascadeDelete: true
         }
       }
-    ]
+    ],
+    // Access rules
+    listRule: "@request.auth.id != \"\" && user.id = @request.auth.id",
+    viewRule: "@request.auth.id != \"\" && user.id = @request.auth.id",
+    createRule: "@request.auth.id != \"\" && @request.data.user = @request.auth.id",
+    updateRule: "@request.auth.id != \"\" && user.id = @request.auth.id",
+    deleteRule: "@request.auth.id != \"\" && user.id = @request.auth.id"
   },
   {
     name: "group_order",
@@ -176,7 +206,13 @@ const collections = [
           cascadeDelete: true
         }
       }
-    ]
+    ],
+    // Access rules
+    listRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    viewRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    createRule: "@request.auth.id != \"\" && @request.data.playlist:exists && @collection.playlists.getOne(@request.data.playlist).user.id = @request.auth.id",
+    updateRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id",
+    deleteRule: "@request.auth.id != \"\" && playlist.user.id = @request.auth.id"
   }
 ];
 
@@ -206,17 +242,44 @@ async function setupPocketBase() {
     
     for (const collection of collections) {
       if (existingNames.includes(collection.name)) {
-        console.log(`Collection "${collection.name}" already exists, skipping.`);
+        console.log(`Collection "${collection.name}" already exists, updating rules...`);
+        
+        // Get the existing collection
+        const existingCollection = existingCollections.find(c => c.name === collection.name);
+        
+        // Update the collection with new rules
+        try {
+          await pb.collections.update(existingCollection.id, {
+            listRule: collection.listRule,
+            viewRule: collection.viewRule,
+            createRule: collection.createRule,
+            updateRule: collection.updateRule,
+            deleteRule: collection.deleteRule
+          });
+          
+          console.log(`Collection "${collection.name}" rules updated successfully.`);
+        } catch (error) {
+          console.error(`Error updating collection "${collection.name}" rules:`, error);
+        }
+        
         continue;
       }
       
       console.log(`Creating collection "${collection.name}"...`);
       
       try {
+        // Extract schema and rules
+        const { schema, name, listRule, viewRule, createRule, updateRule, deleteRule } = collection;
+        
         await pb.collections.create({
-          name: collection.name,
+          name,
           type: "base",
-          schema: collection.schema
+          schema,
+          listRule,
+          viewRule,
+          createRule,
+          updateRule,
+          deleteRule
         });
         
         console.log(`Collection "${collection.name}" created successfully.`);

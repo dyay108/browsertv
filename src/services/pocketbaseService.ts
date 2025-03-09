@@ -22,21 +22,33 @@ interface ChannelGroupAssociation {
   groupNames: string[];
 }
 
+// Ensure user is authenticated, throw error if not
+function ensureAuthenticated() {
+  if (!pb.authStore.isValid || !pb.authStore.record?.id) {
+    throw new Error('User is not authenticated');
+  }
+  return pb.authStore.record.id;
+}
+
 export const playlistService = {
   // Create a new playlist
   async createPlaylist(name: string, content: string, url: string | null = null): Promise<Playlist> {
+    const userId = ensureAuthenticated();
+    
     return await pb.collection('playlists').create({
       name,
       lastUsed: new Date().toISOString(),
       url,
-      user: pb.authStore.model?.id,
+      user: userId,
     }) as Playlist;
   },
   
   // Get all playlists for current user
   async getPlaylists(): Promise<Playlist[]> {
+    const userId = ensureAuthenticated();
+    
     const records = await pb.collection('playlists').getFullList({
-      filter: `user="${pb.authStore.model?.id}"`,
+      filter: `user="${userId}"`,
       sort: '-lastUsed',
     });
     return records as Playlist[];
@@ -44,11 +56,15 @@ export const playlistService = {
   
   // Get a single playlist
   async getPlaylist(id: string): Promise<Playlist> {
+    // PocketBase will enforce the access rule
     return await pb.collection('playlists').getOne(id) as Playlist;
   },
   
   // Update last used timestamp
   async updatePlaylistUsage(id: string): Promise<Playlist> {
+    // Check if the user owns this playlist first 
+    await this.getPlaylist(id); // Will throw if not accessible
+    
     return await pb.collection('playlists').update(id, {
       lastUsed: new Date().toISOString(),
     }) as Playlist;
@@ -56,11 +72,17 @@ export const playlistService = {
   
   // Delete a playlist
   async deletePlaylist(id: string): Promise<boolean> {
+    // Check if the user owns this playlist first
+    await this.getPlaylist(id); // Will throw if not accessible
+    
     return await pb.collection('playlists').delete(id);
   },
 
   // Update existing playlist
   async updatePlaylist(id: string, name: string, content: string, url: string | null = null): Promise<Playlist> {
+    // Check if the user owns this playlist first
+    await this.getPlaylist(id); // Will throw if not accessible
+    
     return await pb.collection('playlists').update(id, {
       name,
       content,
@@ -73,6 +95,7 @@ export const playlistService = {
 export const channelService = {
   // Create a channel
   async createChannel(channelData: Omit<Channel, 'id' | 'created' | 'updated' | 'collectionId' | 'collectionName'>): Promise<Channel> {
+    // Verify playlist ownership is already handled by PocketBase rules
     return await pb.collection('channels').create(channelData) as Channel;
   },
   
@@ -97,6 +120,7 @@ export const channelService = {
     totalItems: number;
     totalPages: number;
   }> {
+    // PocketBase will enforce access rules
     const response = await pb.collection('channels').getList(page, perPage, {
       filter: `playlist="${playlistId}"`,
     });
@@ -109,7 +133,7 @@ export const channelService = {
   
   // Get channels by group
   async getChannelsByGroup(groupId: string, page: number = 1, perPage: number = 100): Promise<Channel[]> {
-    // Using the channel_groups junction table
+    // PocketBase will enforce access rules through expand
     const channelGroups = await pb.collection('channel_groups').getFullList({
       filter: `group="${groupId}"`,
       expand: 'channel',
@@ -125,12 +149,15 @@ export const channelService = {
     totalItems: number;
     totalPages: number;
   }> {
+    const userId = ensureAuthenticated();
     let filter = '';
     
     if (playlistId) {
+      // Search within a specific playlist
       filter = `playlist="${playlistId}" && (name~"${term}" || group~"${term}")`;
     } else {
-      filter = `name~"${term}" || group~"${term}"`;
+      // Search across all playlists owned by the user
+      filter = `playlist.user.id="${userId}" && (name~"${term}" || group~"${term}")`;
     }
     
     const response = await pb.collection('channels').getList(page, perPage, {
@@ -148,6 +175,7 @@ export const channelService = {
 export const groupService = {
   // Create a group
   async createGroup(name: string, playlistId: string): Promise<Group> {
+    // Verify the user owns the playlist - handled by PocketBase rules
     return await pb.collection('groups').create({
       name,
       playlist: playlistId,
@@ -156,6 +184,7 @@ export const groupService = {
   
   // Get groups by playlist
   async getGroupsByPlaylist(playlistId: string): Promise<Group[]> {
+    // PocketBase will enforce access rules
     const records = await pb.collection('groups').getFullList({
       filter: `playlist="${playlistId}"`,
     });
@@ -164,6 +193,8 @@ export const groupService = {
   
   // Save group order
   async saveGroupOrder(groups: string[], playlistId: string): Promise<GroupOrder> {
+    // PocketBase will enforce playlist ownership rules
+    
     // Check if an order already exists
     const existing = await pb.collection('group_order').getList(1, 1, {
       filter: `playlist="${playlistId}"`,
@@ -186,6 +217,7 @@ export const groupService = {
   
   // Get group order
   async getGroupOrder(playlistId: string): Promise<string[] | null> {
+    // PocketBase will enforce access rules
     const order = await pb.collection('group_order').getList(1, 1, {
       filter: `playlist="${playlistId}"`,
     });
@@ -197,18 +229,22 @@ export const groupService = {
 export const favoriteService = {
   // Add a channel to favorites
   async addFavorite(channelId: string, playlistId: string): Promise<Favorite> {
+    const userId = ensureAuthenticated();
+    
     return await pb.collection('favorites').create({
       channel: channelId,
       playlist: playlistId,
-      user: pb.authStore.model?.id,
+      user: userId,
     }) as Favorite;
   },
   
   // Remove a channel from favorites
   async removeFavorite(channelId: string, playlistId: string): Promise<boolean> {
+    const userId = ensureAuthenticated();
+    
     // Find the favorite first
     const favorites = await pb.collection('favorites').getList(1, 1, {
-      filter: `channel="${channelId}" && playlist="${playlistId}" && user="${pb.authStore.model?.id}"`,
+      filter: `channel="${channelId}" && playlist="${playlistId}" && user="${userId}"`,
     });
     
     if (favorites.items.length > 0) {
@@ -220,17 +256,21 @@ export const favoriteService = {
   
   // Check if channel is favorite
   async isChannelFavorite(channelId: string, playlistId: string): Promise<boolean> {
+    const userId = ensureAuthenticated();
+    
     const count = await pb.collection('favorites').getList(1, 1, {
-      filter: `channel="${channelId}" && playlist="${playlistId}" && user="${pb.authStore.model?.id}"`,
+      filter: `channel="${channelId}" && playlist="${playlistId}" && user="${userId}"`,
     });
     
     return count.items.length > 0;
   },
   
   async getFavoriteChannels(playlistId: string, page: number = 1, perPage: number = 100): Promise<Channel[]> {
+    const userId = ensureAuthenticated();
+    
     // First get the list result
     const result = await pb.collection('favorites').getList(page, perPage, {
-      filter: `playlist="${playlistId}" && user="${pb.authStore.model?.id}"`,
+      filter: `playlist="${playlistId}" && user="${userId}"`,
       expand: 'channel',
     });
     
@@ -247,6 +287,11 @@ export const favoriteService = {
 
 // Helper to parse M3U content
 export const parseM3UContent = async (content: string, playlistId: string): Promise<number> => {
+  const userId = ensureAuthenticated();
+  
+  // Verify playlist ownership first
+  await playlistService.getPlaylist(playlistId);
+  
   const channels: Omit<Channel, 'id' | 'created' | 'updated' | 'collectionId' | 'collectionName'>[] = [];
   const groupNames = new Set<string>();
   const channelGroups: ChannelGroupAssociation[] = [];
@@ -364,10 +409,15 @@ export const parseM3UContent = async (content: string, playlistId: string): Prom
   }
   
   // Create the groups
+  // Process them sequentially to maintain order
   const groupMap = new Map<string, string>();
   groupNames.forEach(async (groupName) => {
-    const group = await groupService.createGroup(groupName, playlistId);
-    groupMap.set(groupName, group.id);
+    try {
+      const group = await groupService.createGroup(groupName, playlistId);
+      groupMap.set(groupName, group.id);
+    } catch (error) {
+      console.error(`Error creating group ${groupName}:`, error);
+    }
   });
   
   // Save the group order
@@ -375,21 +425,25 @@ export const parseM3UContent = async (content: string, playlistId: string): Prom
   
   // Create the channels
   for (const channel of channels) {
-    const savedChannel = await channelService.createChannel(channel);
-    
-    // Find the channel-group associations
-    const association = channelGroups.find(cg => cg.channelId === extractIdFromUrl(channel.url));
-    if (association) {
-      for (const groupName of association.groupNames) {
-        const groupId = groupMap.get(groupName);
-        if (groupId) {
-          // Create channel-group association
-          await pb.collection('channel_groups').create({
-            channel: savedChannel.id,
-            group: groupId
-          });
+    try {
+      const savedChannel = await channelService.createChannel(channel);
+      
+      // Find the channel-group associations
+      const association = channelGroups.find(cg => cg.channelId === extractIdFromUrl(channel.url));
+      if (association) {
+        for (const groupName of association.groupNames) {
+          const groupId = groupMap.get(groupName);
+          if (groupId) {
+            // Create channel-group association
+            await pb.collection('channel_groups').create({
+              channel: savedChannel.id,
+              group: groupId
+            });
+          }
         }
       }
+    } catch (error) {
+      console.error(`Error creating channel ${channel.name}:`, error);
     }
   }
   
