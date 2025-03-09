@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { IChannel, db } from '../../db';
+import { Channel } from '../../types/pocketbase-types';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { usePlaylistManagement } from '../../hooks/usePlaylistManagement';
 import { useStreamControl } from '../../hooks/useStreamControl';
@@ -11,6 +11,7 @@ import UrlPlaylistLoader from './UrlPlaylistLoader';
 import DirectStreamInput from './DirectStreamInput';
 import RecentPlaylists from './RecentPlaylists';
 import PlaylistViewer from './PlaylistViewer';
+import { favoriteService, playlistService } from '../../services/pocketbaseService';
 
 /**
  * Main component that manages playlist selection, file upload, and URL loading
@@ -27,7 +28,7 @@ const PlaylistManager: React.FC = () => {
   // State for overall app flow
   const [isFileUploaded, setIsFileUploaded] = useState(false);
   const [isDirectStreamMode, setIsDirectStreamMode] = useState(false);
-  const [selectedChannel, setSelectedChannel] = useState<IChannel | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [favoritesCount, setFavoritesCount] = useState(0);
 
   // Pagination state for playlists
@@ -60,7 +61,7 @@ const PlaylistManager: React.FC = () => {
   const { playStream } = useStreamControl();
 
   // Fetch recent playlists from database
-  const allRecentPlaylists = useLiveQuery(() => db.getRecentPlaylists(), []);
+  const allRecentPlaylists = useLiveQuery(() => playlistService.getPlaylists(), []);
   
   // Calculate playlists for current page
   const recentPlaylists = React.useMemo(() => {
@@ -81,7 +82,7 @@ const PlaylistManager: React.FC = () => {
   // Load favorites count
   useEffect(() => {
     if (selectedPlaylist?.id) {
-      db.getFavoriteChannelCount(selectedPlaylist.id)
+      favoriteService.getFavoriteChannelCount(selectedPlaylist.id)
         .then(count => {
           setFavoritesCount(count);
         })
@@ -105,7 +106,7 @@ const PlaylistManager: React.FC = () => {
   }, []);
 
   // Handler for channel selection
-  const handleChannelSelect = useCallback((channel: IChannel | null) => {
+  const handleChannelSelect = useCallback((channel: Channel | null) => {
     setSelectedChannel(channel);
     if (channel) {
       playStream(channel.url);
@@ -113,9 +114,9 @@ const PlaylistManager: React.FC = () => {
   }, [playStream]);
 
   // Handler for deleting a playlist
-  const handleDeletePlaylist = useCallback(async (id: number) => {
+  const handleDeletePlaylist = useCallback(async (id: string) => {
     try {
-      await db.deletePlaylist(id);
+      await playlistService.deletePlaylist(id);
     } catch (error) {
       console.error('Error deleting playlist:', error);
     }

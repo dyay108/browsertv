@@ -1,8 +1,8 @@
 import React from 'react';
-import { IChannel } from '../../db';
+import { Channel } from '../../types/pocketbase-types';
 
 interface NowPlayingInfoProps {
-  channel: IChannel;
+  channel: Channel;
   visible: boolean;
   onShowSidebar: () => void;
 }

@@ -1,12 +1,12 @@
 import React from 'react';
-import { IChannel } from '../../db';
+import { Channel } from '../../types/pocketbase-types';
 import ChannelList from './ChannelList';
 
 interface FavoritesListProps {
-  favorites: IChannel[];
-  selectedChannel: IChannel | null;
-  onChannelSelect: (channel: IChannel) => void;
-  onToggleFavorite: (channel: IChannel) => void;
+  favorites: Channel[];
+  selectedChannel: Channel | null;
+  onChannelSelect: (channel: Channel) => void;
+  onToggleFavorite: (channel: Channel) => void;
   currentPage: number;
   totalPages: number;
   totalItems: number;

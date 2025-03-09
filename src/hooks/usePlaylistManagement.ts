@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
-import { IPlaylist, db } from '../db';
+import { playlistService, parseM3UContent } from '../services/pocketbaseService';
+import { Playlist } from '../types/pocketbase-types';
 import { prepareProxyUrl } from '../utils/m3uParser';
 
 interface PlaylistHookResult {
-  selectedPlaylist: IPlaylist | null;
+  selectedPlaylist: Playlist | null;
   playlistUrl: string;
   playlistName: string;
   customPlaylistName: string;
@@ -16,20 +17,20 @@ interface PlaylistHookResult {
   setPlaylistUrl: (url: string) => void;
   setUseCorsProxy: (use: boolean) => void;
   setCorsProxyUrl: (url: string) => void;
-  fetchPlaylistFromUrl: (url: string, playlistId?: number) => Promise<void>;
+  fetchPlaylistFromUrl: (url: string, playlistId?: string) => Promise<void>;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  handleLoadPlaylist: (playlist: IPlaylist) => Promise<void>;
+  handleLoadPlaylist: (playlist: Playlist) => Promise<void>;
   handleUpdatePlaylist: () => Promise<void>;
 }
 
 /**
- * Custom hook to manage playlist loading, updating, and related state
+ * Custom hook to manage playlist loading, updating, and related state with PocketBase
  * 
  * @returns Object containing playlist state and management functions
  */
 export function usePlaylistManagement(): PlaylistHookResult {
   // Playlist state
-  const [selectedPlaylist, setSelectedPlaylist] = useState<IPlaylist | null>(null);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [playlistName, setPlaylistName] = useState('');
   const [customPlaylistName, setCustomPlaylistName] = useState('');
@@ -45,7 +46,7 @@ export function usePlaylistManagement(): PlaylistHookResult {
   const fetchTimeout = 30000; // 30 seconds timeout
 
   // Process M3U content (used by both file upload and URL fetch)
-  const processM3UContent = async (content: string, name: string, playlistId?: number) => {
+  const processM3UContent = async (content: string, name: string, existingPlaylistId?: string) => {
     setProcessingStatus('Analyzing content size...');
 
     try {
@@ -56,39 +57,38 @@ export function usePlaylistManagement(): PlaylistHookResult {
       setProcessingStatus(`Parsing ${contentSizeMB} MB of M3U data...`);
       setLoading(true);
 
-      if (playlistId) {
-        // Update existing playlist instead of creating a new one
-        playlistId = await db.updateExistingPlaylist(
-          playlistId,
-          content,
+      let playlist: Playlist;
+
+      if (existingPlaylistId) {
+        // Update existing playlist
+        playlist = await playlistService.updatePlaylist(
+          existingPlaylistId,
           name || 'Unnamed Playlist',
-          playlistUrl
+          content,
+          playlistUrl || null
         );
-        console.log(`Updated existing playlist with ID: ${playlistId}`);
+        console.log(`Updated existing playlist with ID: ${existingPlaylistId}`);
       } else {
-        // Save playlist to database using the parseAndSavePlaylist method
-        const playlistId = await db.parseAndSavePlaylist(
-          content,
+        // Create a new playlist
+        playlist = await playlistService.createPlaylist(
           name || 'Unnamed Playlist',
-          playlistUrl
+          content,
+          playlistUrl || null
         );
-
-        console.log(`Saved playlist with ID: ${playlistId}`);
-
-
-        // Get the playlist object
-        const playlist = await db.playlists.get(playlistId);
-        if (playlist) {
-          setSelectedPlaylist(playlist);
-        }
-
-        // Clear status and loading states
-        setProcessingStatus('');
-        setLoading(false);
-        setIsUpdating(false);
-
-        return playlistId;
+        console.log(`Created new playlist with ID: ${playlist.id}`);
       }
+
+      // Parse M3U content to extract channels and groups
+      await parseM3UContent(content, playlist.id);
+
+      setSelectedPlaylist(playlist);
+      
+      // Clear status and loading states
+      setProcessingStatus('');
+      setLoading(false);
+      setIsUpdating(false);
+      
+      return playlist.id;
     } catch (error) {
       console.error('Error processing content:', error);
       setProcessingStatus('Error processing playlist file');
@@ -140,7 +140,7 @@ export function usePlaylistManagement(): PlaylistHookResult {
   }, [customPlaylistName]);
 
   // Fetch playlist from URL
-  const fetchPlaylistFromUrl = useCallback(async (url: string, playlistId?: number) => {
+  const fetchPlaylistFromUrl = useCallback(async (url: string, playlistId?: string) => {
     if (!url.trim()) {
       setProcessingStatus('Please enter a valid URL');
       return;
@@ -153,7 +153,7 @@ export function usePlaylistManagement(): PlaylistHookResult {
     let finalUrl = url;
     const alreadyUsingProxy = url.includes(corsProxyUrl);
 
-    if (useCorsProxy && !alreadyUsingProxy) {
+    if (useCorsProxy && !alreadyUsingProxy && corsProxyUrl) {
       finalUrl = prepareProxyUrl(corsProxyUrl, url);
       setProcessingStatus(`Fetching playlist from URL: ${url} (using CORS proxy)`);
       console.log(`Using CORS proxy for M3U fetch:`, finalUrl);
@@ -274,23 +274,28 @@ export function usePlaylistManagement(): PlaylistHookResult {
       }
 
       // Save the URL for future updates
-      setPlaylistUrl(finalUrl);
+      setPlaylistUrl(url); // Store the original URL, not the proxy URL
 
       let name: string;
 
-      if(playlistId){
-        name =  await db.getPlaylistName(playlistId) || "Unknown";
-      }
+      if (playlistId) {
+        // If we're updating an existing playlist, get its name
+        try {
+          const existingPlaylist = await playlistService.getPlaylist(playlistId);
+          name = existingPlaylist.name;
+        } catch (error) {
+          name = "Unknown Playlist";
+        }
+      } else {
+        // Extract playlist name from URL if no custom name is set
+        const urlObj = new URL(url);
+        const pathParts = urlObj.pathname.split('/');
+        const fileName = pathParts[pathParts.length - 1].replace(/\.[^/.]+$/, ""); // Last part of path, without extension
 
-      else {
-      // Extract playlist name from URL if no custom name is set
-      const urlObj = new URL(url);
-      const pathParts = urlObj.pathname.split('/');
-      const fileName = pathParts[pathParts.length - 1].replace(/\.[^/.]+$/, ""); // Last part of path, without extension
-
-      // Use custom name if provided, otherwise use file name from URL, or a default
-      name = customPlaylistName.trim() || fileName || 'Playlist from URL';
+        // Use custom name if provided, otherwise use file name from URL, or a default
+        name = customPlaylistName.trim() || fileName || 'Playlist from URL';
       }
+      
       setPlaylistName(name);
 
       // Reset custom name field after successful fetch
@@ -350,7 +355,7 @@ export function usePlaylistManagement(): PlaylistHookResult {
   }, [corsProxyUrl, customPlaylistName, loading, isUpdating, useCorsProxy]);
 
   // Load a saved playlist
-  const handleLoadPlaylist = useCallback(async (playlist: IPlaylist) => {
+  const handleLoadPlaylist = useCallback(async (playlist: Playlist) => {
     if (!playlist || !playlist.id) return;
 
     setLoading(true);
@@ -358,7 +363,7 @@ export function usePlaylistManagement(): PlaylistHookResult {
 
     try {
       // Update the last used timestamp
-      await db.updatePlaylistUsage(playlist.id);
+      await playlistService.updatePlaylistUsage(playlist.id);
 
       // Set the selected playlist
       setSelectedPlaylist(playlist);

@@ -2,18 +2,18 @@ import React, { useEffect, useCallback } from 'react';
 import VideoPlayer from '../VideoPlayer';
 import NowPlayingInfo from './NowPlayingInfo';
 import StreamControls from './StreamControls';
-import { IChannel } from '../../db';
+import { Channel } from '../../types/pocketbase-types';
 import { useStreamControl } from '../../hooks/useStreamControl';
 import { useUiVisibility } from '../../hooks/useUiVisibility';
 
 interface VideoPlayerContainerProps {
-  selectedChannel: IChannel | null;
+  selectedChannel: Channel | null;
   initialStreamUrl: string;
   isDirectStreamMode?: boolean;
   isLoadingChannels: boolean;
   onReturnToMain?: () => void;
   onShowSidebar: () => void;
-  onChannelSelect?: (channel: IChannel | null) => void;
+  onChannelSelect?: (channel: Channel | null) => void;
 }
 
 /**

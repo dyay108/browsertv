@@ -1,14 +1,14 @@
 import React from 'react';
-import { IChannel } from '../../db';
+import { Channel } from '../../types/pocketbase-types';
 import ChannelItem from './ChannelItem';
 import PaginationControls from '../common/PaginationControls';
 
 interface ChannelListProps {
-  channels: IChannel[];
-  selectedChannel: IChannel | null;
+  channels: Channel[];
+  selectedChannel: Channel | null;
   favoriteStatus: {[key: string]: boolean};
-  onChannelSelect: (channel: IChannel) => void;
-  onToggleFavorite: (channel: IChannel) => void;
+  onChannelSelect: (channel: Channel) => void;
+  onToggleFavorite: (channel: Channel) => void;
   currentPage: number;
   totalPages: number;
   totalItems?: number;

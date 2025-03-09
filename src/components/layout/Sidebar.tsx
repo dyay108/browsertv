@@ -1,29 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { IChannel, IPlaylist, db } from '../../db';
+import { Channel, Playlist } from '../../types/pocketbase-types';
 import GroupsPanel from '../groups/GroupsPanel';
 import ChannelsPanel from '../channels/ChannelsPanel';
 import SearchPanel from '../channels/SearchPanel';
 import { debounce } from '../../utils/debounce';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { channelService, favoriteService } from '../../services/pocketbaseService';
 
 interface SidebarProps {
   playlistName: string;
-  selectedPlaylist: IPlaylist | null;
+  selectedPlaylist: Playlist | null;
   visible: boolean;
   onVisibilityChange: (visible: boolean) => void;
   onChangePlaylist: () => void;
   onUpdatePlaylist: () => void;
   selectedGroup: string;
   groups: string[];
-  channels: IChannel[];
+  channels: Channel[];
   onGroupSelect: (group: string) => void;
   groupChannelCounts: { [key: string]: number };
   favoritesCount: number;
   onSortGroups: () => void;
   onDragEnd: (sourceIndex: number, destinationIndex: number) => void;
-  selectedChannel: IChannel | null;
-  onChannelSelect: (channel: IChannel | null) => void;
+  selectedChannel: Channel | null;
+  onChannelSelect: (channel: Channel | null) => void;
   currentPage: number;
   totalPages: number;
   totalChannelsInGroup: number;
@@ -79,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isSearchMode, setIsSearchMode] = useState(false);
   
   // Search specific states
-  const [searchResults, setSearchResults] = useState<IChannel[]>([]);
+  const [searchResults, setSearchResults] = useState<Channel[]>([]);
   const [searchCurrentPage, setSearchCurrentPage] = useState(0);
   const [searchTotalPages, setSearchTotalPages] = useState(0);
   const [searchTotalResults, setSearchTotalResults] = useState(0);
@@ -88,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Debounced search function
   const debouncedSearch = useCallback(
-    debounce(async (term: string, playlistId?: number, page = 0) => {
+    debounce(async (term: string, playlistId?: string, page = 0) => {
       if (!term.trim()) {
         setIsSearchMode(false);
         setSearchResults([]);
@@ -98,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       try {
         // Search only within the current playlist with pagination
-        const { results, total } = await db.searchChannels(term, playlistId, page, 100);
+        const { results, total } = await channelService.searchChannels(term, playlistId, page, 100);
         
         // Update search state
         setSearchResults(results);
@@ -168,7 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [searchCurrentPage, searchTerm, selectedPlaylist, debouncedSearch]);
 
   // Toggle favorite status for a channel
-  const toggleFavorite = useCallback(async (channel: IChannel) => {
+  const toggleFavorite = useCallback(async (channel: Channel) => {
     if (!selectedPlaylist?.id) return;
     
     try {
@@ -176,10 +177,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       
       if (isFavorite) {
         // Remove from favorites
-        await db.removeFromFavorites(channel.id, selectedPlaylist.id);
+        await favoriteService.removeFromFavorites(channel.id, selectedPlaylist.id);
       } else {
         // Add to favorites
-        await db.addToFavorites(channel.id, selectedPlaylist.id);
+        await favoriteService.addToFavorites(channel.id, selectedPlaylist.id);
       }
       
       // Update local state
@@ -194,7 +195,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Load favorite statuses for search results
   useEffect(() => {
-    const loadFavoriteStatuses = async (channelList: IChannel[]) => {
+    const loadFavoriteStatuses = async (channelList: Channel[]) => {
       if (!selectedPlaylist?.id || channelList.length === 0) return;
       
       try {
@@ -206,7 +207,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           const batchChannels = channelList.slice(i, i + BATCH_SIZE);
           
           for (const channel of batchChannels) {
-            const isFavorite = await db.isChannelFavorite(channel.id, selectedPlaylist.id);
+            const isFavorite = await favoriteService.isChannelFavorite(channel.id, selectedPlaylist.id);
             statuses[channel.id] = isFavorite;
           }
         }

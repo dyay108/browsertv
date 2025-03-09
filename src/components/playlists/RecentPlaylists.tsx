@@ -1,11 +1,11 @@
 import React from 'react';
-import { IPlaylist } from '../../db';
+import { Playlist } from '../../types/pocketbase-types';
 import PaginationControls from '../common/PaginationControls';
 
 interface RecentPlaylistsProps {
-  playlists: IPlaylist[];
-  onSelectPlaylist: (playlist: IPlaylist) => void;
-  onDeletePlaylist: (id: number) => void;
+  playlists: Playlist[];
+  onSelectPlaylist: (playlist: Playlist) => void;
+  onDeletePlaylist: (id: string) => void;
   currentPage: number;
   totalPages: number;
   onNextPage: () => void;

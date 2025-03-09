@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { db, IChannel, IPlaylist } from '../db';
+import { channelService, groupService, favoriteService } from '../services/pocketbaseService';
+import { Channel, Playlist, Group } from '../types/pocketbase-types';
 
 interface ChannelGroupsHookResult {
   // Group state
@@ -14,7 +15,7 @@ interface ChannelGroupsHookResult {
   totalPages: number;
   totalChannelsInGroup: number;
   channelsPerPage: number;
-  channels: IChannel[];
+  channels: Channel[];
   
   // Group management functions
   setSelectedGroup: (group: string) => void;
@@ -33,14 +34,14 @@ interface ChannelGroupsHookResult {
 }
 
 /**
- * Custom hook to manage channel groups, selection, and pagination
+ * Custom hook to manage channel groups, selection, and pagination with PocketBase
  * 
  * @param selectedPlaylist The currently selected playlist
  * @param initialGroup Optional initial group to select
  * @returns Object containing group state and management functions
  */
 export function useChannelGroups(
-  selectedPlaylist: IPlaylist | null,
+  selectedPlaylist: Playlist | null,
   initialGroup = ''
 ): ChannelGroupsHookResult {
   // Group state
@@ -51,29 +52,28 @@ export function useChannelGroups(
   const [showGroupsPanel, setShowGroupsPanel] = useState(true);
   
   // Pagination state
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1); // PocketBase starts pagination at 1
   const [totalPages, setTotalPages] = useState(0);
   const [totalChannelsInGroup, setTotalChannelsInGroup] = useState(0);
   const [channelsPerPage] = useState(100); // 100 channels per page
-  const [channels, setChannels] = useState<IChannel[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
   
   // Loading state
   const [loading, setLoading] = useState(false);
 
   // Function to sort groups alphabetically
   const sortGroupsAlphabetically = useCallback(async () => {
+    if (!selectedPlaylist?.id) return;
+    
     // Create a new alphabetically sorted array of groups
     const sortedGroups = [...groups].sort();
     setGroups(sortedGroups);
-    // We also update the custom order to match the new sorted order
+    // Also update the custom order to match the new sorted order
     setCustomGroupOrder(sortedGroups);
     
-    // Save the sorted order to database
+    // Save the sorted order to PocketBase
     try {
-      // If we have a selected playlist, pass its ID to saveGroupOrder
-      if (selectedPlaylist?.id) {
-        await db.saveGroupOrder(sortedGroups, selectedPlaylist.id);
-      }
+      await groupService.saveGroupOrder(sortedGroups, selectedPlaylist.id);
       console.log('Sorted group order saved to database');
     } catch (error) {
       console.error('Error saving sorted group order:', error);
@@ -82,6 +82,8 @@ export function useChannelGroups(
 
   // Handle drag-and-drop reordering
   const handleDragEnd = useCallback(async (sourceIndex: number, destinationIndex: number) => {
+    if (!selectedPlaylist?.id) return;
+    
     // Skip if no change
     if (sourceIndex === destinationIndex) {
       return;
@@ -100,12 +102,9 @@ export function useChannelGroups(
     setCustomGroupOrder(currentOrder);
     setGroups(currentOrder);
     
-    // Save the new order to the database for persistence
+    // Save the new order to PocketBase
     try {
-      // If we have a selected playlist, pass its ID to saveGroupOrder
-      if (selectedPlaylist?.id) {
-        await db.saveGroupOrder(currentOrder, selectedPlaylist.id);
-      }
+      await groupService.saveGroupOrder(currentOrder, selectedPlaylist.id);
       console.log('Group order saved to database');
     } catch (error) {
       console.error('Error saving group order:', error);
@@ -115,7 +114,7 @@ export function useChannelGroups(
   // Handler for group selection
   const handleGroupSelect = useCallback((group: string) => {
     // Reset pagination when changing groups
-    setCurrentPage(0);
+    setCurrentPage(1);
 
     if (group === '') {
       console.log(`Selected ALL CHANNELS (empty string)`);
@@ -134,7 +133,7 @@ export function useChannelGroups(
   
   // Function to load next page of channels
   const loadNextPage = useCallback(() => {
-    if (currentPage < totalPages - 1) {
+    if (currentPage < totalPages) {
       console.log(`Loading next page: ${currentPage + 1} of ${totalPages}`);
       setCurrentPage(prev => prev + 1);
     }
@@ -142,11 +141,11 @@ export function useChannelGroups(
 
   // Function to load previous page of channels
   const loadPrevPage = useCallback(() => {
-    if (currentPage > 0) {
+    if (currentPage > 1) {
       console.log(`Loading previous page: ${currentPage - 1} of ${totalPages}`);
       setCurrentPage(prev => prev - 1);
     }
-  }, [currentPage, totalPages]);
+  }, [currentPage]);
   
   // Load channels for the selected group with pagination
   useEffect(() => {
@@ -155,32 +154,68 @@ export function useChannelGroups(
         try {
           setLoading(true);
   
-          // We need to know which playlist we're working with
-          const currentPlaylistId = selectedPlaylist?.id;
-          if (!currentPlaylistId) {
+          // We need the playlist ID to fetch data
+          const playlistId = selectedPlaylist?.id;
+          if (!playlistId) {
             setLoading(false);
             return;
           }
+          
+          let channelsData: { items: Channel[], totalItems: number, totalPages: number } | Channel[];
+          
+          // Handle different group selections
+          if (selectedGroup === '__ALL_CHANNELS__') {
+            // Get all channels for this playlist
+            channelsData = await channelService.getChannelsByPlaylist(playlistId, currentPage, channelsPerPage);
+            
+            // Check if we got paginated results or just an array
+            if ('items' in channelsData) {
+              setChannels(channelsData.items);
+              setTotalChannelsInGroup(channelsData.totalItems);
+              setTotalPages(channelsData.totalPages);
+            } 
+            // else {
+            //   setChannels(channelsData);
+            //   setTotalChannelsInGroup(channelsData.length);
+            //   setTotalPages(1);
+            // }
+          } else if (selectedGroup === 'Favorites') {
+            // Get favorite channels
+            const favoriteChannels = await favoriteService.getFavoriteChannels(playlistId, currentPage, channelsPerPage);
+            setChannels(favoriteChannels);
+            
+            // For favorites, we might need to do an additional count query if the API doesn't return paginated results
+            // This would depend on how your favorites API is set up
+            setTotalChannelsInGroup(favoriteChannels.length); // This is an approximation
+            setTotalPages(1); // This is also an approximation
+          } else {
+            // Find the group ID first
+            const groupsList = await groupService.getGroupsByPlaylist(playlistId);
+            const group = groupsList.find(g => g.name === selectedGroup);
+            
+            if (group) {
+              // Get channels for this specific group
+              const groupChannels = await channelService.getChannelsByGroup(group.id, currentPage, channelsPerPage);
+              
+              // For groups, we might need to handle paginated results differently
+              if (Array.isArray(groupChannels)) {
+                setChannels(groupChannels);
+                setTotalChannelsInGroup(groupChannels.length); // This is an approximation
+                setTotalPages(1); // This is also an approximation
+              } 
+              // else if ('items' in groupChannels) {
+              //   setChannels(groupChannels.items);
+              //   setTotalChannelsInGroup(groupChannels.totalItems);
+              //   setTotalPages(groupChannels.totalPages);
+              // }
+            } else {
+              // Group not found
+              setChannels([]);
+              setTotalChannelsInGroup(0);
+              setTotalPages(0);
+            }
+          }
   
-          // Get channel count for pagination
-          const totalCount = await db.getChannelCountByGroup(
-            selectedGroup === '__ALL_CHANNELS__' ? '' : selectedGroup,
-            currentPlaylistId
-          );
-  
-          setTotalChannelsInGroup(totalCount);
-          const pages = Math.ceil(totalCount / channelsPerPage);
-          setTotalPages(pages);
-  
-          // Get channels for this group and playlist
-          const channelsForGroup = await db.getChannelsByGroup(
-            selectedGroup === '__ALL_CHANNELS__' ? '' : selectedGroup,
-            currentPlaylistId,
-            currentPage,
-            channelsPerPage
-          );
-  
-          setChannels(channelsForGroup);
           setLoading(false);
         } catch (error) {
           console.error('Error loading channels:', error);
@@ -192,67 +227,76 @@ export function useChannelGroups(
     }
   }, [selectedPlaylist, selectedGroup, currentPage, channelsPerPage]);
 
-  // Load groups from database when playlist changes
+  // Load groups from PocketBase when playlist changes
   useEffect(() => {
     const loadGroupsForCurrentPlaylist = async () => {
       if (!selectedPlaylist?.id) return;
 
+      setLoading(true);
       try {
-        // Load groups from the database with proper ordering
-        const playlistGroups = await db.getGroupsByPlaylist(selectedPlaylist.id);
+        // Load groups from PocketBase
+        const groupEntities = await groupService.getGroupsByPlaylist(selectedPlaylist.id);
+        const groupNames = groupEntities.map(g => g.name);
 
-        if (playlistGroups.length > 0) {
-          setGroups(playlistGroups);
-
-          // If no group is selected, select the first one
-          if (!selectedGroup && playlistGroups.length > 0) {
-            setSelectedGroup(playlistGroups[0]);
-          }
-
-          // Load channel counts for each group
-          const counts: { [key: string]: number } = {};
-
-          // First get count for "All Channels"
-          const allChannelsCount = await db.getChannelCountByGroup('', selectedPlaylist.id);
-          counts[""] = allChannelsCount;
-
-          // Then get counts for each group
-          for (const group of playlistGroups) {
-            const groupCount = await db.getChannelCountByGroup(group, selectedPlaylist.id);
-            counts[group] = groupCount;
-          }
-
-          setGroupChannelCounts(counts);
+        // Load group order from PocketBase
+        const savedOrder = await groupService.getGroupOrder(selectedPlaylist.id);
+        
+        // Determine the final group order
+        let finalGroups: string[];
+        if (savedOrder && savedOrder.length > 0) {
+          // Filter saved order to only include existing groups and add any missing groups
+          const existingGroupNames = new Set(groupNames);
+          const filteredOrder = savedOrder.filter(name => existingGroupNames.has(name));
+          
+          // Add any groups that were not in the saved order
+          groupNames.forEach(groupName => {
+            if (!filteredOrder.includes(groupName)) {
+              filteredOrder.push(groupName);
+            }
+          });
+          
+          finalGroups = filteredOrder;
+        } else {
+          // No saved order, use alphabetical
+          finalGroups = [...groupNames].sort();
         }
+
+        setGroups(finalGroups);
+        setCustomGroupOrder(savedOrder || []);
+
+        // If no group is selected, select the first one or "ALL CHANNELS"
+        if (!selectedGroup) {
+          setSelectedGroup(finalGroups.length > 0 ? finalGroups[0] : '__ALL_CHANNELS__');
+        }
+
+        // Calculate channel counts for each group (this might be expensive)
+        const counts: { [key: string]: number } = {};
+        
+        // Get all channels count first
+        const allChannelsData = await channelService.getChannelsByPlaylist(selectedPlaylist.id, 1, 1);
+        counts[""] = 'totalItems' in allChannelsData ? allChannelsData.totalItems : 0;
+
+        // This part can be expensive and might need optimization
+        for (const group of groupEntities) {
+          try {
+            const groupChannels = await channelService.getChannelsByGroup(group.id);
+            counts[group.name] = Array.isArray(groupChannels) ? groupChannels.length : 0;
+          } catch (error) {
+            console.error(`Error getting count for group ${group.name}:`, error);
+            counts[group.name] = 0;
+          }
+        }
+
+        setGroupChannelCounts(counts);
+        setLoading(false);
       } catch (error) {
         console.error('Error loading groups for playlist:', error);
+        setLoading(false);
       }
     };
 
     loadGroupsForCurrentPlaylist();
   }, [selectedPlaylist, selectedGroup]);
-
-  // Load saved group order from database
-  useEffect(() => {
-    const loadSavedGroupOrder = async () => {
-      setLoading(true);
-      try {
-        if (selectedPlaylist?.id) {
-          // Load playlist-specific group order
-          const savedOrder = await db.getGroupOrder(selectedPlaylist.id);
-          if (savedOrder && savedOrder.length > 0) {
-            setLoading(false);
-            console.log('Loaded saved group order for playlist from database');
-            setCustomGroupOrder(savedOrder);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading saved group order:', error);
-      }
-    };
-    
-    loadSavedGroupOrder();
-  }, [selectedPlaylist]);
 
   return {
     groups,

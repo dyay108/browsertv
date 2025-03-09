@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { IChannel, IPlaylist, db } from '../../db';
+import { Channel, Playlist } from '../../types/pocketbase-types';
 import { debounce } from '../../utils/debounce';
+import { channelService, favoriteService } from '../../services/pocketbaseService';
 
 interface ChannelsPanelProps {
   selectedGroup: string;
-  selectedPlaylist: IPlaylist | null;
+  selectedPlaylist: Playlist | null;
   onBackToGroups: () => void;
-  channels: IChannel[];
-  selectedChannel: IChannel | null;
-  onChannelSelect: (channel: IChannel) => void;
+  channels: Channel[];
+  selectedChannel: Channel | null;
+  onChannelSelect: (channel: Channel) => void;
   currentPage: number;
   totalPages: number;
   totalChannelsInGroup: number;
@@ -40,7 +41,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
 }) => {
   // Search functionality
   const [searchTerm, setLocalSearchTerm] = useState(initialSearchTerm);
-  const [searchResults, setSearchResults] = useState<IChannel[]>([]);
+  const [searchResults, setSearchResults] = useState<Channel[]>([]);
   const [isSearchMode, setIsSearchMode] = useState(!!initialSearchTerm.trim());
   const [searchCurrentPage, setSearchCurrentPage] = useState(0);
   const [searchTotalPages, setSearchTotalPages] = useState(0);
@@ -49,7 +50,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   
   // Favorites handling
   const [channelFavoriteStatus, setChannelFavoriteStatus] = useState<{[key: string]: boolean}>({});
-  const [favoriteChannels, setFavoriteChannels] = useState<IChannel[]>([]);
+  const [favoriteChannels, setFavoriteChannels] = useState<Channel[]>([]);
   const [favoritesCount, setFavoritesCount] = useState(0);
   const [favoriteCurrentPage, setFavoriteCurrentPage] = useState(0);
   const [favoriteTotalPages, setFavoriteTotalPages] = useState(0);
@@ -58,7 +59,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   // Debounced search function
   const debouncedSearch = useCallback(
     // Use a debounce to avoid excessive DB calls while typing
-    debounce(async (term: string, playlistId?: number, page = 0) => {
+    debounce(async (term: string, playlistId?: string, page = 0) => {
       if (!term.trim()) {
         setIsSearchMode(false);
         setSearchResults([]);
@@ -68,7 +69,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
 
       try {
         // Search only within the current playlist with pagination
-        const { results, total } = await db.searchChannels(term, playlistId, page, channelsPerPage);
+        const { results, total } = await channelService.searchChannels(term, playlistId, page, channelsPerPage);
         
         // Only update state if this is still the active search
         setSearchResults(results);
@@ -115,7 +116,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   }, [searchCurrentPage, searchTerm, selectedPlaylist, debouncedSearch]);
   
   // Toggle favorite status for a channel
-  const toggleFavorite = useCallback(async (channel: IChannel) => {
+  const toggleFavorite = useCallback(async (channel: Channel) => {
     if (!selectedPlaylist?.id) return;
     
     try {
@@ -123,10 +124,10 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       
       if (isFavorite) {
         // Remove from favorites
-        await db.removeFromFavorites(channel.id, selectedPlaylist.id);
+        await favoriteService.removeFromFavorites(channel.id, selectedPlaylist.id);
       } else {
         // Add to favorites
-        await db.addToFavorites(channel.id, selectedPlaylist.id);
+        await favoriteService.addToFavorites(channel.id, selectedPlaylist.id);
       }
       
       // Update local state
@@ -152,7 +153,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       setIsSearching(true);
       
       // Get favorite count
-      const count = await db.getFavoriteChannelCount(selectedPlaylist.id);
+      const count = await favoriteService.getFavoriteChannelCount(selectedPlaylist.id);
       setFavoritesCount(count);
       
       // Calculate pages
@@ -160,7 +161,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       setFavoriteTotalPages(pages);
       
       // Get favorites for current page
-      const favorites = await db.getFavoriteChannels(
+      const favorites = await favoriteService.getFavoriteChannels(
         selectedPlaylist.id,
         favoriteCurrentPage,
         channelsPerPage
@@ -189,7 +190,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   }, [favoriteCurrentPage]);
   
   // Load favorite statuses for displayed channels
-  const loadFavoriteStatuses = useCallback(async (channelList: IChannel[]) => {
+  const loadFavoriteStatuses = useCallback(async (channelList: Channel[]) => {
     if (!selectedPlaylist?.id || channelList.length === 0) return;
     
     try {
@@ -201,7 +202,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
         const batchChannels = channelList.slice(i, i + BATCH_SIZE);
         
         for (const channel of batchChannels) {
-          const isFavorite = await db.isChannelFavorite(channel.id, selectedPlaylist.id);
+          const isFavorite = await favoriteService.isChannelFavorite(channel.id, selectedPlaylist.id);
           statuses[channel.id] = isFavorite;
         }
       }

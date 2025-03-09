@@ -1,16 +1,16 @@
 import React from 'react';
-import { IChannel } from '../../db';
+import { Channel } from '../../types/pocketbase-types';
 import ChannelList from './ChannelList';
 
 interface SearchPanelProps {
   searchTerm: string;
   onSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClearSearch: () => void;
-  searchResults: IChannel[];
-  selectedChannel: IChannel | null;
+  searchResults: Channel[];
+  selectedChannel: Channel | null;
   favoriteStatus: {[key: string]: boolean};
-  onChannelSelect: (channel: IChannel) => void;
-  onToggleFavorite: (channel: IChannel) => void;
+  onChannelSelect: (channel: Channel) => void;
+  onToggleFavorite: (channel: Channel) => void;
   isSearching: boolean;
   searchCurrentPage: number;
   searchTotalPages: number;

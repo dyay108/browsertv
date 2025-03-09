@@ -1,17 +1,17 @@
 import React from 'react';
-import { IChannel, IPlaylist } from '../../db';
+import { Channel, Playlist } from '../../types/pocketbase-types'
 import VideoPlayerContainer from '../player/VideoPlayerContainer';
 import Sidebar from '../layout/Sidebar';
 import { useUiVisibility } from '../../hooks/useUiVisibility';
 import { useChannelGroups } from '../../hooks/useChannelGroups';
 
 interface PlaylistViewerProps {
-  selectedPlaylist: IPlaylist | null;
+  selectedPlaylist: Playlist | null;
   playlistName: string;
   playlistUrl: string;
   isUpdating: boolean;
-  selectedChannel: IChannel | null;
-  onChannelSelect: (channel: IChannel | null) => void;
+  selectedChannel: Channel | null;
+  onChannelSelect: (channel: Channel | null) => void;
   onReturnToMainView: () => void;
   onChangePlaylist: () => void;
   onUpdatePlaylist: () => void;

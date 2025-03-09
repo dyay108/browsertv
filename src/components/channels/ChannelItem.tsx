@@ -1,12 +1,12 @@
 import React from 'react';
-import { IChannel } from '../../db';
+import { Channel } from '../../types/pocketbase-types';
 
 interface ChannelItemProps {
-  channel: IChannel;
+  channel: Channel;
   isSelected: boolean;
   isFavorite: boolean;
-  onSelect: (channel: IChannel) => void;
-  onToggleFavorite: (channel: IChannel) => void;
+  onSelect: (channel: Channel) => void;
+  onToggleFavorite: (channel: Channel) => void;
 }
 
 /**
