@@ -59,7 +59,7 @@ migrate((app) => {
       {
         name: "logo",
         type: "text",
-        required: true,
+        required: false,
       },
       {
         name: "group",
