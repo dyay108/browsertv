@@ -1,11 +1,14 @@
 #!/bin/sh
 set -e
 
-echo "Starting PocketBase initialization script..."
+# echo "Starting PocketBase initialization script..."
 
-# Install required packages
-echo "Installing required packages..."
-apk add --no-cache nodejs npm curl
+# # Install required packages
+# echo "Installing required packages..."
+# apk add --no-cache nodejs npm curl
+
+# export ADMIN_EMAIL
+# export ADMIN_PASSWORD
 
 # Setup directories
 mkdir -p /pb/pb_data
@@ -23,7 +26,7 @@ else
 fi
 # Start PocketBase with bootstrap admin
 echo "Starting PocketBase server with bootstrap admin..."
-./pocketbase superuser create "${ADMIN_EMAIL}" "${ADMIN_PASSWORD}"
+# ./pocketbase superuser create "${ADMIN_EMAIL}" "${ADMIN_PASSWORD}"
 ./pocketbase serve --http="0.0.0.0:8090" --dir=/pb/pb_data &
 PB_PID=$!
 
@@ -31,9 +34,9 @@ PB_PID=$!
 echo "Waiting for PocketBase to start..."
 sleep 10
 
-# Run the setup collections script
-echo "Running setup collections script..."
-node /pb/setup-collections.js
+# # Run the setup collections script
+# echo "Running setup collections script..."
+# node /pb/setup-collections.js
 
 # Keep container running
 echo "Initialization complete. Waiting on PocketBase process..."

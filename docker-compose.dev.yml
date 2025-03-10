@@ -12,15 +12,13 @@ services:
       - REACT_APP_POCKETBASE_URL=http://localhost:8090
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true  # Helps with hot reload in some environments
-    command: >
-      sh -c "npm install &&
-             npm start"
+    command: npm start
   
   pocketbase-dev:
     image: alpine:latest
     working_dir: /pb
     volumes:
-      - ./setup-collections.js:/pb/setup-collections.js:ro 
+      # - ./setup-collections.js:/pb/setup-collections.js:ro 
       - ./pb_data:/pb/pb_data 
       - ./node_modules:/pb/node_modules 
       - ./:/pb
@@ -29,4 +27,6 @@ services:
     environment:
       - ADMIN_EMAIL=dd@dd.com
       - ADMIN_PASSWORD=1234567890
+      - USER_EMAIL=cc@cc.com
+      - USER_PASSWORD=1234567890
     command: sh /pb/init-pocketbase.sh
