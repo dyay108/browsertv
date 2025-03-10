@@ -42,7 +42,7 @@ migrate((app) => {
     type: "base",
     listRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     viewRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
-    //createRule: `@request.auth.id != "" && @request.data.playlist:exists && @collection.playlists.getOne(@request.data.playlist).user.id = @request.auth.id`,
+    createRule: `@request.auth.id != "" && playlist =  @request.body.playlist && playlist.user.id = @request.auth.id`,
     updateRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     deleteRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     fields: [
@@ -93,7 +93,7 @@ migrate((app) => {
     type: "base",
     listRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     viewRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
-    //createRule: `@request.auth.id != "" && @request.data.playlist:exists && @collection.playlists.getOne(@request.data.playlist).user.id = @request.auth.id`,
+    createRule: `@request.auth.id != "" && playlist = @request.body.playlist && playlist.user.id = @request.auth.id`,
     updateRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     deleteRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     fields: [
@@ -119,7 +119,7 @@ migrate((app) => {
     type: "base",
     listRule: `@request.auth.id != "" && (channel.playlist.user.id = @request.auth.id || group.playlist.user.id = @request.auth.id)`,
     viewRule: `@request.auth.id != "" && (channel.playlist.user.id = @request.auth.id || group.playlist.user.id = @request.auth.id)`,
-    //createRule: `@request.auth.id != "" && @request.data.channel:exists && @request.data.group:exists && @collection.channels.getOne(@request.data.channel).playlist.user.id = @request.auth.id && @collection.groups.getOne(@request.data.group).playlist.user.id = @request.auth.id`,
+    createRule: `@request.auth.id != "" && group =  @request.body.group && group.playlist.user.id = @request.auth.id`,
     updateRule: `@request.auth.id != "" && channel.playlist.user.id = @request.auth.id && group.playlist.user.id = @request.auth.id`,
     deleteRule: `@request.auth.id != "" && channel.playlist.user.id = @request.auth.id && group.playlist.user.id = @request.auth.id`,
     fields: [
@@ -185,7 +185,7 @@ migrate((app) => {
     type: "base",
     listRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     viewRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
-    //createRule: `@request.auth.id != "" && @request.data.playlist:exists && @collection.playlists.getOne(@request.data.playlist).user.id = @request.auth.id`,
+    createRule: `@request.auth.id != "" && playlist =  @request.body.playlist && playlist.user.id = @request.auth.id`,
     updateRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     deleteRule: `@request.auth.id != "" && playlist.user.id = @request.auth.id`,
     fields: [

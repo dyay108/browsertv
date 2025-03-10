@@ -37,17 +37,17 @@ function recordToUser(record: RecordModel | null): User | null {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(recordToUser(pb.authStore.model));
+  const [user, setUser] = useState<User | null>(recordToUser(pb.authStore.record));
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     // Set initial user
-    setUser(recordToUser(pb.authStore.model));
+    setUser(recordToUser(pb.authStore.record));
     setLoading(false);
 
     // Subscribe to auth state changes
-    const unsubscribe = pb.authStore.onChange((_token, model) => {
-      setUser(recordToUser(model));
+    const unsubscribe = pb.authStore.onChange((_token, record) => {
+      setUser(recordToUser(record));
     });
 
     return () => {

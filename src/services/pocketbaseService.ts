@@ -24,6 +24,7 @@ interface ChannelGroupAssociation {
 
 // Ensure user is authenticated, throw error if not
 function ensureAuthenticated() {
+  pb.autoCancellation(false);
   if (!pb.authStore.isValid || !pb.authStore.record?.id) {
     throw new Error('User is not authenticated');
   }
