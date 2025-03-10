@@ -60,6 +60,7 @@ migrate((app) => {
         name: "logo",
         type: "text",
         required: false,
+        max: 10000,
       },
       {
         name: "group",
