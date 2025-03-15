@@ -36,9 +36,9 @@ const PlaylistViewer: React.FC<PlaylistViewerProps> = ({
   isDirectStreamMode = false
 }) => {
   // Use UI visibility hook for sidebar showing/hiding
-  const { 
-    sidebarVisible, 
-    setSidebarVisible, 
+  const {
+    sidebarVisible,
+    setSidebarVisible,
     showSidebar,
     startSidebarHideTimer,
     clearSidebarHideTimer
@@ -61,10 +61,19 @@ const PlaylistViewer: React.FC<PlaylistViewerProps> = ({
     loading
   } = useChannelGroups(selectedPlaylist);
 
+  const showLoadingOverlay = loading || isUpdating;
+
   return (
     <div className="fullscreen-player-container">
-      {/* Video Player */}
-      <VideoPlayerContainer 
+      {showLoadingOverlay && (
+        <div className="loading-overlay">
+          <div className="loading-channels">
+            <div className="loading-spinner"></div>
+            <p>Loading channels...</p>
+          </div>
+        </div>
+      )}
+      <VideoPlayerContainer
         selectedChannel={selectedChannel}
         initialStreamUrl={selectedChannel?.url || ''}
         isDirectStreamMode={isDirectStreamMode}
@@ -74,8 +83,7 @@ const PlaylistViewer: React.FC<PlaylistViewerProps> = ({
         isLoadingChannels={loading}
       />
 
-      {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         playlistName={playlistName}
         selectedPlaylist={selectedPlaylist}
         visible={sidebarVisible}

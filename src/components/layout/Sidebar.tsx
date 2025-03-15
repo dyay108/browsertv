@@ -150,7 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Function to load next page of search results
   const loadNextSearchPage = useCallback(() => {
-    if (searchCurrentPage < searchTotalPages - 1) {
+    if (searchCurrentPage < searchTotalPages) {
       setIsSearching(true);
       const nextPage = searchCurrentPage + 1;
       setSearchCurrentPage(nextPage);

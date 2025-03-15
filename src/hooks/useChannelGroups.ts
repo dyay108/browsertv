@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { channelService, groupService, favoriteService } from '../services/pocketbaseService';
-import { Channel, Playlist, Group } from '../types/pocketbase-types';
+import { Channel, Playlist } from '../types/pocketbase-types';
 
 interface ChannelGroupsHookResult {
   // Group state
@@ -59,7 +59,7 @@ export function useChannelGroups(
   const [channels, setChannels] = useState<Channel[]>([]);
   
   // Loading state
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Function to sort groups alphabetically
   const sortGroupsAlphabetically = useCallback(async () => {
@@ -134,7 +134,7 @@ export function useChannelGroups(
   // Function to load next page of channels
   const loadNextPage = useCallback(() => {
     if (currentPage < totalPages) {
-      console.log(`Loading next page: ${currentPage + 1} of ${totalPages}`);
+      console.log(`Loading next page: ${currentPage} of ${totalPages}`);
       setCurrentPage(prev => prev + 1);
     }
   }, [currentPage, totalPages]);
@@ -203,11 +203,11 @@ export function useChannelGroups(
                 setTotalChannelsInGroup(groupChannels.length); // This is an approximation
                 setTotalPages(1); // This is also an approximation
               } 
-              // else if ('items' in groupChannels) {
-              //   setChannels(groupChannels.items);
-              //   setTotalChannelsInGroup(groupChannels.totalItems);
-              //   setTotalPages(groupChannels.totalPages);
-              // }
+              else if ('items' in groupChannels) {
+                setChannels(groupChannels.items);
+                setTotalChannelsInGroup(groupChannels.totalItems);
+                setTotalPages(groupChannels.totalPages);
+              }
             } else {
               // Group not found
               setChannels([]);
@@ -280,7 +280,7 @@ export function useChannelGroups(
         for (const group of groupEntities) {
           try {
             const groupChannels = await channelService.getChannelsByGroup(group.id);
-            counts[group.name] = Array.isArray(groupChannels) ? groupChannels.length : 0;
+            counts[group.name] = groupChannels.totalItems//Array.isArray(groupChannels) ? groupChannels.length : 0;
           } catch (error) {
             console.error(`Error getting count for group ${group.name}:`, error);
             counts[group.name] = 0;

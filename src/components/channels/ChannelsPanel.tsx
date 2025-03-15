@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Channel, Playlist } from '../../types/pocketbase-types';
 import { debounce } from '../../utils/debounce';
 import { channelService, favoriteService } from '../../services/pocketbaseService';
@@ -51,10 +51,17 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   // Favorites handling
   const [channelFavoriteStatus, setChannelFavoriteStatus] = useState<{[key: string]: boolean}>({});
   const [favoriteChannels, setFavoriteChannels] = useState<Channel[]>([]);
-  const [favoritesCount, setFavoritesCount] = useState(0);
-  const [favoriteCurrentPage, setFavoriteCurrentPage] = useState(0);
+  const [favoritesCount, setFavoritesCount] = useState(1);
+  const [favoriteCurrentPage, setFavoriteCurrentPage] = useState(1);
   const [favoriteTotalPages, setFavoriteTotalPages] = useState(0);
   const [channelsPerPage] = useState(100);
+  
+  // Refs to track previous values
+  const prevSelectedPlaylistId = useRef<string | null>(null);
+  const prevChannelsRef = useRef<Channel[]>([]);
+  const prevSearchResultsRef = useRef<Channel[]>([]);
+  const prevSelectedGroupRef = useRef<string | null>(null);
+  const prevFavoriteCurrentPageRef = useRef<number>(0);
   
   // Debounced search function
   const debouncedSearch = useCallback(
@@ -97,7 +104,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   
   // Function to load next page of search results
   const loadNextSearchPage = useCallback(() => {
-    if (searchCurrentPage < searchTotalPages - 1) {
+    if (searchCurrentPage < searchTotalPages) {
       setIsSearching(true);
       const nextPage = searchCurrentPage + 1;
       setSearchCurrentPage(nextPage);
@@ -107,7 +114,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
 
   // Function to load previous page of search results
   const loadPrevSearchPage = useCallback(() => {
-    if (searchCurrentPage > 0) {
+    if (searchCurrentPage > 1) {
       setIsSearching(true);
       const prevPage = searchCurrentPage - 1;
       setSearchCurrentPage(prevPage);
@@ -138,7 +145,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       
       // If we're viewing favorites, refresh the list
       if (selectedGroup === 'Favorites') {
-        loadFavoriteChannels();
+        loadFavoriteChannels(selectedPlaylist.id);
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
@@ -146,14 +153,14 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   }, [channelFavoriteStatus, selectedPlaylist, selectedGroup]);
   
   // Load favorite channels with pagination
-  const loadFavoriteChannels = useCallback(async () => {
-    if (!selectedPlaylist?.id) return;
+  const loadFavoriteChannels = useCallback(async (playlistId: string) => {
+    if (!playlistId) return;
     
     try {
       setIsSearching(true);
       
       // Get favorite count
-      const count = await favoriteService.getFavoriteChannelCount(selectedPlaylist.id);
+      const count = await favoriteService.getFavoriteChannelCount(playlistId);
       setFavoritesCount(count);
       
       // Calculate pages
@@ -162,7 +169,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       
       // Get favorites for current page
       const favorites = await favoriteService.getFavoriteChannels(
-        selectedPlaylist.id,
+        playlistId,
         favoriteCurrentPage,
         channelsPerPage
       );
@@ -173,25 +180,25 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       console.error('Error loading favorites:', error);
       setIsSearching(false);
     }
-  }, [selectedPlaylist, favoriteCurrentPage, channelsPerPage]);
+  }, [favoriteCurrentPage, channelsPerPage]);
   
   // Function to load next page of favorites
   const loadNextFavoritePage = useCallback(() => {
-    if (favoriteCurrentPage < favoriteTotalPages - 1) {
+    if (favoriteCurrentPage < favoriteTotalPages) {
       setFavoriteCurrentPage(prev => prev + 1);
     }
   }, [favoriteCurrentPage, favoriteTotalPages]);
   
   // Function to load previous page of favorites
   const loadPrevFavoritePage = useCallback(() => {
-    if (favoriteCurrentPage > 0) {
+    if (favoriteCurrentPage > 1) {
       setFavoriteCurrentPage(prev => prev - 1);
     }
   }, [favoriteCurrentPage]);
   
   // Load favorite statuses for displayed channels
-  const loadFavoriteStatuses = useCallback(async (channelList: Channel[]) => {
-    if (!selectedPlaylist?.id || channelList.length === 0) return;
+  const loadFavoriteStatuses = useCallback(async (channelList: Channel[], playlistId: string) => {
+    if (!playlistId || channelList.length === 0) return;
     
     try {
       const statuses: {[key: string]: boolean} = {};
@@ -202,7 +209,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
         const batchChannels = channelList.slice(i, i + BATCH_SIZE);
         
         for (const channel of batchChannels) {
-          const isFavorite = await favoriteService.isChannelFavorite(channel.id, selectedPlaylist.id);
+          const isFavorite = await favoriteService.isChannelFavorite(channel.id, playlistId);
           statuses[channel.id] = isFavorite;
         }
       }
@@ -214,38 +221,75 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
     } catch (error) {
       console.error('Error loading favorite statuses:', error);
     }
-  }, [selectedPlaylist]);
+  }, []);
   
   // Load favorites when viewing Favorites group
   useEffect(() => {
-    if (selectedGroup === 'Favorites' && selectedPlaylist?.id) {
-      loadFavoriteChannels();
+    // Only run when the selectedGroup changes to 'Favorites'
+    if (selectedGroup === 'Favorites' && 
+        selectedPlaylist?.id && 
+        (prevSelectedGroupRef.current !== 'Favorites' || 
+         prevSelectedPlaylistId.current !== selectedPlaylist.id)) {
+      
+      loadFavoriteChannels(selectedPlaylist.id);
     }
+    
+    // Update refs
+    prevSelectedGroupRef.current = selectedGroup;
+    prevSelectedPlaylistId.current = selectedPlaylist?.id || null;
   }, [selectedGroup, selectedPlaylist, loadFavoriteChannels]);
   
   // Load favorite statuses for regular channels
   useEffect(() => {
-    if (channels.length > 0) {
-      loadFavoriteStatuses(channels);
+    // Check if channels have changed by comparing lengths and first channel ID
+    const channelsChanged = channels.length !== prevChannelsRef.current.length || 
+                          (channels.length > 0 && prevChannelsRef.current.length > 0 && 
+                           channels[0].id !== prevChannelsRef.current[0].id);
+    
+    if (channels.length > 0 && selectedPlaylist?.id && channelsChanged) {
+      loadFavoriteStatuses(channels, selectedPlaylist.id);
+      prevChannelsRef.current = channels;
     }
-  }, [channels, loadFavoriteStatuses]);
+  }, [channels, loadFavoriteStatuses, selectedPlaylist]);
   
   // Load favorite statuses for search results
   useEffect(() => {
-    if (searchResults.length > 0) {
-      loadFavoriteStatuses(searchResults);
+    // Check if search results have changed
+    const searchResultsChanged = searchResults.length !== prevSearchResultsRef.current.length || 
+                               (searchResults.length > 0 && prevSearchResultsRef.current.length > 0 && 
+                                searchResults[0].id !== prevSearchResultsRef.current[0].id);
+    
+    if (searchResults.length > 0 && selectedPlaylist?.id && searchResultsChanged) {
+      loadFavoriteStatuses(searchResults, selectedPlaylist.id);
+      prevSearchResultsRef.current = searchResults;
     }
-  }, [searchResults, loadFavoriteStatuses]);
+  }, [searchResults, loadFavoriteStatuses, selectedPlaylist]);
+  
+  // Effect to reload favorite channels when the page changes
+  useEffect(() => {
+    if (selectedGroup === 'Favorites' && 
+        selectedPlaylist?.id && 
+        favoriteCurrentPage !== prevFavoriteCurrentPageRef.current) {
+      
+      loadFavoriteChannels(selectedPlaylist.id);
+      prevFavoriteCurrentPageRef.current = favoriteCurrentPage;
+    }
+  }, [favoriteCurrentPage, selectedGroup, selectedPlaylist, loadFavoriteChannels]);
   
   // Effect to trigger search when initialSearchTerm is provided on component mount
   useEffect(() => {
-    if (initialSearchTerm && initialSearchTerm.trim() && selectedPlaylist?.id) {
+    if (initialSearchTerm && 
+        initialSearchTerm.trim() && 
+        selectedPlaylist?.id && 
+        !isSearchMode) {
+      
       setSearchTerm(initialSearchTerm);
       setIsSearchMode(true);
       setIsSearching(true);
+      setSearchCurrentPage(1); // Reset to first page
       debouncedSearch(initialSearchTerm, selectedPlaylist.id, 0);
     }
-  }, [initialSearchTerm, selectedPlaylist, debouncedSearch, setSearchTerm]);
+  }, [initialSearchTerm, selectedPlaylist, debouncedSearch, isSearchMode]);
   
   // Determine which view to show
   const isFavoritesMode = selectedGroup === 'Favorites';
@@ -293,7 +337,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                 {searchTotalResults} channels match &quot;{searchTerm}&quot;
                 {searchTotalPages > 1 && (
                   <span className="pagination-info">
-                    {' '} (Page {searchCurrentPage + 1}/{searchTotalPages})
+                    {' '} (Page {searchCurrentPage}/{searchTotalPages})
                   </span>
                 )}
               </span>
@@ -303,7 +347,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
               {favoritesCount} favorites
               {favoriteTotalPages > 1 && (
                 <span className="pagination-info">
-                  {' '} (Page {favoriteCurrentPage + 1}/{favoriteTotalPages})
+                  {' '} (Page {favoriteCurrentPage}/{favoriteTotalPages})
                 </span>
               )}
             </span>
@@ -312,7 +356,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
               {totalChannelsInGroup} channels
               {totalPages > 1 && (
                 <span className="pagination-info">
-                  {' '} (Page {currentPage + 1}/{totalPages})
+                  {' '} (Page {currentPage}/{totalPages})
                 </span>
               )}
             </>
@@ -386,7 +430,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
               <div className="pagination-controls">
                 <button
                   onClick={loadPrevSearchPage}
-                  disabled={searchCurrentPage === 0 || isSearching}
+                  disabled={searchCurrentPage === 1 || isSearching}
                   className="pagination-button prev"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -395,11 +439,11 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                   Previous
                 </button>
                 <span className="pagination-status">
-                  {searchCurrentPage + 1} / {searchTotalPages} ({searchTotalResults} results)
+                  {searchCurrentPage} / {searchTotalPages} ({searchTotalResults} results)
                 </span>
                 <button
                   onClick={loadNextSearchPage}
-                  disabled={searchCurrentPage >= searchTotalPages - 1 || isSearching}
+                  disabled={searchCurrentPage >= searchTotalPages || isSearching}
                   className="pagination-button next"
                 >
                   Next
@@ -473,7 +517,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                   <div className="pagination-controls">
                     <button
                       onClick={loadPrevFavoritePage}
-                      disabled={favoriteCurrentPage === 0}
+                      disabled={favoriteCurrentPage === 1}
                       className="pagination-button prev"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -482,11 +526,11 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                       Previous
                     </button>
                     <span className="pagination-status">
-                      {favoriteCurrentPage + 1} / {favoriteTotalPages} ({favoritesCount} favorites)
+                      {favoriteCurrentPage} / {favoriteTotalPages} ({favoritesCount} favorites)
                     </span>
                     <button
                       onClick={loadNextFavoritePage}
-                      disabled={favoriteCurrentPage >= favoriteTotalPages - 1}
+                      disabled={favoriteCurrentPage >= favoriteTotalPages}
                       className="pagination-button next"
                     >
                       Next
@@ -545,7 +589,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                   <div className="pagination-controls">
                     <button
                       onClick={onPrevPage}
-                      disabled={currentPage === 0}
+                      disabled={currentPage === 1}
                       className="pagination-button prev"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -554,11 +598,11 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                       Previous
                     </button>
                     <span className="pagination-status">
-                      {currentPage + 1} / {totalPages}
+                      {currentPage} / {totalPages}
                     </span>
                     <button
                       onClick={onNextPage}
-                      disabled={currentPage >= totalPages - 1}
+                      disabled={currentPage >= totalPages}
                       className="pagination-button next"
                     >
                       Next

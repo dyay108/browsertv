@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Channel } from '../../types/pocketbase-types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Channel, Playlist } from '../../types/pocketbase-types';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { usePlaylistManagement } from '../../hooks/usePlaylistManagement';
 import { useStreamControl } from '../../hooks/useStreamControl';
@@ -20,11 +20,11 @@ const PlaylistManager: React.FC = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
   
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
+  // Track if a favorites request is in progress
+  const isFetchingFavorites = useRef(false);
+  // Track the last playlist ID to prevent duplicate requests
+  const lastFetchedPlaylistId = useRef<string | null>(null);
+  
   // State for overall app flow
   const [isFileUploaded, setIsFileUploaded] = useState(false);
   const [isDirectStreamMode, setIsDirectStreamMode] = useState(false);
@@ -60,8 +60,45 @@ const PlaylistManager: React.FC = () => {
   // Use stream control hook for direct streaming
   const { playStream } = useStreamControl();
 
+  // Use a basic debounce for the getPlaylists function to prevent multiple calls
+  const lastFetchTime = useRef(0);
+  const getPlaylistsDebounced = useCallback(() => {
+    // Return a promise (required for useLiveQuery)
+    return new Promise<Playlist[]>((resolve) => {
+      const now = Date.now();
+      
+      // If we've fetched recently, delay the next fetch
+      if (now - lastFetchTime.current < 2000) {
+        // Wait a bit before fetching again
+        setTimeout(() => {
+          // Use .then() instead of async/await in the Promise constructor
+          playlistService.getPlaylists()
+            .then(playlists => {
+              lastFetchTime.current = Date.now();
+              resolve(playlists);
+            })
+            .catch(error => {
+              console.error('Error fetching playlists:', error);
+              resolve([]); // Resolve with empty array on error
+            });
+        }, 2000);
+      } else {
+        // Fetch immediately if it's been a while
+        playlistService.getPlaylists()
+          .then(playlists => {
+            lastFetchTime.current = Date.now();
+            resolve(playlists);
+          })
+          .catch(error => {
+            console.error('Error fetching playlists:', error);
+            resolve([]); // Resolve with empty array on error
+          });
+      }
+    });
+  }, []);
+  
   // Fetch recent playlists from database
-  const allRecentPlaylists = useLiveQuery(() => playlistService.getPlaylists(), []);
+  const allRecentPlaylists = useLiveQuery(() => getPlaylistsDebounced(), []);
   
   // Calculate playlists for current page
   const recentPlaylists = React.useMemo(() => {
@@ -81,14 +118,39 @@ const PlaylistManager: React.FC = () => {
 
   // Load favorites count
   useEffect(() => {
-    if (selectedPlaylist?.id) {
-      favoriteService.getFavoriteChannelCount(selectedPlaylist.id)
+    // Function to fetch favorites count with debounce
+    const fetchFavoritesCount = (playlistId: string) => {
+      // Skip if already fetching or if it's the same playlist
+      if (isFetchingFavorites.current || playlistId === lastFetchedPlaylistId.current) {
+        return;
+      }
+      
+      // Set fetching flag
+      isFetchingFavorites.current = true;
+      lastFetchedPlaylistId.current = playlistId;
+      
+      favoriteService.getFavoriteChannelCount(playlistId)
         .then(count => {
           setFavoritesCount(count);
         })
-        .catch(error => console.error('Error loading favorites count:', error));
+        .catch(error => {
+          console.error('Error loading favorites count:', error);
+        })
+        .finally(() => {
+          // Reset fetching flag
+          isFetchingFavorites.current = false;
+        });
+    };
+    
+    if (selectedPlaylist?.id) {
+      // Use a small timeout to handle potential double-invocation in dev mode
+      const timeoutId = setTimeout(() => {
+        fetchFavoritesCount(selectedPlaylist.id);
+      }, 0);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [selectedPlaylist]);
+  }, [selectedPlaylist?.id]);
 
   // Handle direct stream submission
   const handleDirectStreamSubmit = useCallback((url: string) => {
@@ -113,14 +175,54 @@ const PlaylistManager: React.FC = () => {
     }
   }, [playStream]);
 
+  // Handler for logging out
+  const handleLogout = useCallback(() => {
+    logout();
+    navigate('/login');
+  }, [logout, navigate]);
+
   // Handler for deleting a playlist
   const handleDeletePlaylist = useCallback(async (id: string) => {
     try {
       await playlistService.deletePlaylist(id);
+      // Reset the last fetch time to trigger a refresh
+      lastFetchTime.current = 0;
     } catch (error) {
       console.error('Error deleting playlist:', error);
     }
   }, []);
+
+  // Handler for playlist selection
+  const handlePlaylistSelection = useCallback((playlist: Playlist) => {
+    handleLoadPlaylist(playlist);
+    setIsFileUploaded(true);
+  }, [handleLoadPlaylist]);
+
+  // Handlers for pagination
+  const handleNextPage = useCallback(() => {
+    setPlaylistCurrentPage(prev => prev + 1);
+  }, []);
+
+  const handlePrevPage = useCallback(() => {
+    setPlaylistCurrentPage(prev => prev - 1);
+  }, []);
+
+  // Handler for file upload
+  const handleUploadFile = useCallback((e: any) => {
+    handleFileUpload(e);
+    setIsFileUploaded(true);
+  }, [handleFileUpload]);
+
+  // Handler for URL playlist fetch
+  const handleFetchPlaylist = useCallback(() => {
+    fetchPlaylistFromUrl(playlistUrl);
+    setIsFileUploaded(true);
+  }, [fetchPlaylistFromUrl, playlistUrl]);
+
+  // Handler for CORS proxy toggle
+  const handleToggleCorsProxy = useCallback(() => {
+    setUseCorsProxy(!useCorsProxy);
+  }, [useCorsProxy, setUseCorsProxy]);
 
   return (
     <main className="App-main">
@@ -146,24 +248,18 @@ const PlaylistManager: React.FC = () => {
 
             <RecentPlaylists 
               playlists={recentPlaylists}
-              onSelectPlaylist={(playlist) => {
-                handleLoadPlaylist(playlist);
-                setIsFileUploaded(true);
-              }}
+              onSelectPlaylist={handlePlaylistSelection}
               onDeletePlaylist={handleDeletePlaylist}
               currentPage={playlistCurrentPage}
               totalPages={playlistTotalPages}
-              onNextPage={() => setPlaylistCurrentPage(prev => prev + 1)}
-              onPrevPage={() => setPlaylistCurrentPage(prev => prev - 1)}
+              onNextPage={handleNextPage}
+              onPrevPage={handlePrevPage}
             />
 
             <PlaylistUploader 
               customPlaylistName={customPlaylistName}
               onNameChange={setCustomPlaylistName}
-              onFileUpload={(e) => {
-                handleFileUpload(e);
-                setIsFileUploaded(true);
-              }}
+              onFileUpload={handleUploadFile}
               loading={loading}
             />
 
@@ -177,13 +273,10 @@ const PlaylistManager: React.FC = () => {
               onNameChange={setCustomPlaylistName}
               playlistUrl={playlistUrl}
               onUrlChange={setPlaylistUrl}
-              onFetchPlaylist={() => {
-                fetchPlaylistFromUrl(playlistUrl);
-                setIsFileUploaded(true);
-              }}
+              onFetchPlaylist={handleFetchPlaylist}
               loading={loading}
               useCorsProxy={useCorsProxy}
-              onToggleCorsProxy={() => setUseCorsProxy(!useCorsProxy)}
+              onToggleCorsProxy={handleToggleCorsProxy}
               corsProxyUrl={corsProxyUrl}
               onCorsProxyUrlChange={setCorsProxyUrl}
               processingStatus={processingStatus}

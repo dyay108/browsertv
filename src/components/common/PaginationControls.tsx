@@ -30,7 +30,7 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
     <div className="pagination-controls">
       <button
         onClick={onPrevPage}
-        disabled={currentPage === 0 || loading}
+        disabled={currentPage === 1 || loading}
         className="pagination-button prev"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -40,13 +40,13 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
       </button>
       <span className="pagination-status">
         {totalItems 
-          ? `${currentPage + 1}/${totalPages} (${totalItems})`
-          : `${currentPage + 1}/${totalPages}`
+          ? `${currentPage}/${totalPages} (${totalItems})`
+          : `${currentPage}/${totalPages}`
         }
       </span>
       <button
         onClick={onNextPage}
-        disabled={currentPage >= totalPages - 1 || loading}
+        disabled={currentPage >= totalPages || loading}
         className="pagination-button next"
       >
         Next

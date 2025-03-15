@@ -3,7 +3,6 @@ import {
   Playlist,
   Channel,
   Group,
-  ChannelGroup,
   Favorite,
   GroupOrder
 } from '../types/pocketbase-types';
@@ -133,15 +132,31 @@ export const channelService = {
   },
 
   // Get channels by group
-  async getChannelsByGroup(groupId: string, page = 1, perPage = 100): Promise<Channel[]> {
+  async getChannelsByGroup(groupId: string, page = 1, perPage = 100): Promise<{
+    items: Channel[];
+    totalItems: number;
+    totalPages: number;
+  }>  {
     // PocketBase will enforce access rules through expand
-    const channelGroups = await pb.collection('channel_groups').getFullList({
+    const response = await pb.collection('channel_groups').getList(page, perPage, {
       filter: `group="${groupId}"`,
       expand: 'channel',
-    }) as (ChannelGroup & { expand: { channel: Channel } })[];
+    });
 
-    // Extract the channels from the expanded data
-    return channelGroups.map(cg => cg.expand.channel);
+    // Now map over the items and extract the expanded channel
+    const items = response.items.map(item => {
+      // Make sure expand exists and has a channel property
+      if (item.expand && 'channel' in item.expand) {
+        return item.expand.channel as Channel;
+      }
+      return null;
+    }).filter((channel): channel is Channel => channel !== null); // Filter out nulls with type guard
+
+    return {
+      items,
+      totalItems: response.totalItems,
+      totalPages: response.totalPages
+    };
   },
 
   // Search channels
@@ -179,7 +194,6 @@ export const channelService = {
 export const groupService = {
   // Create a group
   async createGroup(name: string, playlistId: string): Promise<Group> {
-    // Verify the user owns the playlist - handled by PocketBase rules
     return await pb.collection('groups').create({
       name,
       playlist: playlistId,
@@ -303,7 +317,7 @@ export const favoriteService = {
 
 // Helper to parse M3U content
 export const parseM3UContent = async (content: string, playlistId: string): Promise<number> => {
-  const userId = ensureAuthenticated();
+  ensureAuthenticated();
 
   // Verify playlist ownership first
   await playlistService.getPlaylist(playlistId);
@@ -429,11 +443,15 @@ export const parseM3UContent = async (content: string, playlistId: string): Prom
   const groupMap = new Map<string, string>();
   groupNames.forEach(async (groupName) => {
     try {
+      pb.autoCancellation(false);
       const group = await groupService.createGroup(groupName, playlistId);
       groupMap.set(groupName, group.id);
     } catch (error) {
+      pb.autoCancellation(true);
       console.error(`Error creating group ${groupName}:`, error);
     }
+
+    pb.autoCancellation(true);
   });
 
   // Save the group order
