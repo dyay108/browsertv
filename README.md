@@ -179,3 +179,20 @@ You can customize these files to fit your specific deployment needs.
 ## Data Privacy
 
 All playlists and favorites are stored locally in your browser using IndexedDB. No data is uploaded to any server.
+
+## Future Development Considerations
+
+While BrowserTV is currently a fully client-side application, future development may explore:
+- Implementing optional server-side capabilities
+- Providing additional stream processing features
+- Expanding device synchronization options
+
+The focus will remain on maintaining privacy and providing a seamless streaming experience.
+
+## Contributing
+
+Contributions to BrowserTV are welcome! Feel free to submit issues or pull requests.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
