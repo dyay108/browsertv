@@ -9,6 +9,7 @@ import UrlPlaylistLoader from './UrlPlaylistLoader';
 import DirectStreamInput from './DirectStreamInput';
 import RecentPlaylists from './RecentPlaylists';
 import PlaylistViewer from './PlaylistViewer';
+import { useSharedStreamControl } from '../../contexts/streamContext';
 
 /**
  * Main component that manages playlist selection, file upload, and URL loading
@@ -47,7 +48,7 @@ const PlaylistManager: React.FC = () => {
   } = usePlaylistManagement();
 
   // Use stream control hook for direct streaming
-  const { playStream } = useStreamControl();
+  const { playStream } = useSharedStreamControl(); 
 
   // Fetch recent playlists from database
   const allRecentPlaylists = useLiveQuery(() => db.getRecentPlaylists(), []);
@@ -84,7 +85,7 @@ const PlaylistManager: React.FC = () => {
     setIsFileUploaded(true);
     setIsDirectStreamMode(true);
     playStream(url);
-  }, [playStream]);
+  }, [playStream, setIsFileUploaded, setIsDirectStreamMode]);
 
   // Function to return to the main upload view
   const returnToMainView = useCallback(() => {

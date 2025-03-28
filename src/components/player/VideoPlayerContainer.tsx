@@ -3,8 +3,8 @@ import VideoPlayer from '../VideoPlayer';
 import NowPlayingInfo from './NowPlayingInfo';
 import StreamControls from './StreamControls';
 import { IChannel } from '../../db';
-import { useStreamControl } from '../../hooks/useStreamControl';
 import { useUiVisibility } from '../../hooks/useUiVisibility';
+import { useSharedStreamControl } from '../../contexts/streamContext';
 
 interface VideoPlayerContainerProps {
   selectedChannel: IChannel | null;
@@ -36,8 +36,8 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
     retryStream, 
     forceReconnect, 
     clearStream: clearStreamHook,
-    setCurrentStream 
-  } = useStreamControl(initialStreamUrl);
+    // setCurrentStream 
+  } = useSharedStreamControl();
   
   // Enhanced clear stream function that also clears the selected channel
   const clearStream = useCallback(() => {
@@ -66,13 +66,6 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
     showUIElements
   } = useUiVisibility();
 
-  // When initialStreamUrl changes, update the current stream
-  useEffect(() => {
-    if (initialStreamUrl && initialStreamUrl !== currentStream) {
-      setCurrentStream(initialStreamUrl);
-    }
-  }, [initialStreamUrl, currentStream, setCurrentStream]);
-
   // Effect to hide UI elements after delay when stream is playing
   useEffect(() => {
     if (currentStream) {
@@ -89,6 +82,7 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
       
       // Cleanup
       return () => {
+        console.log('VideoPlayerContainer rendering state:', { currentStream, key, loading });
         window.removeEventListener('mousemove', handleMouseMove);
       };
     }
@@ -97,7 +91,7 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
   return (
     <div className="player-fullscreen">
       {/* Reconnecting overlay */}
-      {isLoadingChannels && (
+      {isLoadingChannels && !isDirectStreamMode && (
         <div className="loading-overlay">
           <div className="loading-spinner"></div>
           <p>Loading Channels...</p>
