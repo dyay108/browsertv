@@ -9,9 +9,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - REACT_APP_POCKETBASE_URL=http://localhost:8090
+      - VITE_POCKETBASE_URL=http://localhost:8090 
       - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true  # Helps with hot reload in some environments
+      - CHOKIDAR_USEPOLLING=true
     command: npm start
   
   pocketbase-dev:
