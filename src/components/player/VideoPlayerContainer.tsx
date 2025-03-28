@@ -90,14 +90,18 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
 
   return (
     <div className="player-fullscreen">
-      {/* Reconnecting overlay */}
-      {isLoadingChannels && !isDirectStreamMode && (
+      {/* Loading overlay - show during load */}
+      {(isLoadingChannels && !isDirectStreamMode) || loading  ? (
         <div className="loading-overlay">
           <div className="loading-spinner"></div>
-          <p>Loading Channels...</p>
+          <p>
+            {isLoadingChannels ? "Loading Channels..." :
+             "Loading Stream..."}
+          </p>
         </div>
-      )}
-      {currentStream ? (
+      ) : null}
+      
+      {(currentStream) ? (
         <div className="player-container" key={`container-${key}`}>
           {selectedChannel && !isDirectStreamMode && (
             <NowPlayingInfo

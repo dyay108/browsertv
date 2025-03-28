@@ -41,10 +41,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
 
   // Setup on mount - this runs once when the component mounts
   useEffect(() => {
-    console.log('VideoPlayer mounted, src:', src);
+    console.log(`VideoPlayer mounted with src:`, src);
     
-    // Reset error state
+    // Reset state
     setError(null);
+    setCurrentMethod(null);
+    methodsTriedRef.current = [];
+    successRef.current = false;
     
     if (isForceReconnect) {
       setReconnecting(true);
@@ -559,8 +562,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
     }
     
     // Cleanup on unmount
-    return cleanup;
-  }, [src]);
+    return () => {
+      console.log('VideoPlayer unmounting, cleaning up resources');
+      cleanup();
+    };
+  }, [src, containerRef.current]);
 
   return (
     <div className="player-wrapper">
