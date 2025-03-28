@@ -26,6 +26,7 @@ export interface Channel extends RecordModel {
   group: string;
   tvgId?: string;
   tvgName?: string;
+  favorite: boolean;
   playlist: string; // Reference to playlist ID
 }
 

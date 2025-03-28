@@ -127,15 +127,18 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
     if (!selectedPlaylist?.id) return;
     
     try {
-      const isFavorite = channelFavoriteStatus[channel.id] || false;
+      const isFavorite = channel.favorite;
       
       if (isFavorite) {
         // Remove from favorites
-        await favoriteService.removeFromFavorites(channel.id, selectedPlaylist.id);
+        await favoriteService.removeFromFavorites(channel.id);
       } else {
         // Add to favorites
         await favoriteService.addToFavorites(channel.id, selectedPlaylist.id);
       }
+      
+      // Update the channel object directly
+      channel.favorite = !isFavorite;
       
       // Update local state
       setChannelFavoriteStatus(prev => ({
@@ -150,7 +153,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
     } catch (error) {
       console.error('Error toggling favorite:', error);
     }
-  }, [channelFavoriteStatus, selectedPlaylist, selectedGroup]);
+  }, [selectedPlaylist, selectedGroup]);
   
   // Load favorite channels with pagination
   const loadFavoriteChannels = useCallback(async (playlistId: string) => {
@@ -201,41 +204,15 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
     if (!playlistId || channelList.length === 0) return;
     
     try {
+      // Simply map the favorite status from each channel object
       const statuses: {[key: string]: boolean} = {};
       
-      // Process in batches to avoid excessive DB calls
-      const BATCH_SIZE = 50;
-      for (let i = 0; i < channelList.length; i += BATCH_SIZE) {
-        // Check if operation was aborted before continuing
-        if (abortSignal?.aborted) return;
-        
-        const batchChannels = channelList.slice(i, i + BATCH_SIZE);
-        
-        // Fetch all favorite statuses in parallel instead of sequentially
-        const statusPromises = batchChannels.map(channel => 
-          favoriteService.isChannelFavorite(channel.id, playlistId, { signal: abortSignal })
-            .then(isFavorite => ({ channelId: channel.id, isFavorite }))
-            .catch(error => {
-              // Only log error if not aborted
-              if (!abortSignal?.aborted) {
-                console.error(`Error checking favorite status for channel ${channel.id}:`, error);
-              }
-              return { channelId: channel.id, isFavorite: false };
-            })
-        );
-        
-        const results = await Promise.all(statusPromises);
-        
-        // Check if operation was aborted after batch completes
-        if (abortSignal?.aborted) return;
-        
-        // Process results
-        for (const { channelId, isFavorite } of results) {
-          statuses[channelId] = isFavorite;
-        }
-      }
+      // Set favorite status directly from the channel object
+      channelList.forEach(channel => {
+        statuses[channel.id] = channel.favorite;
+      });
       
-      // Only update state if not aborted
+      // Update state with the favorite statuses
       if (!abortSignal?.aborted) {
         setChannelFavoriteStatus(prev => ({
           ...prev,
@@ -357,64 +334,64 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   }, [searchResults, loadFavoriteStatuses, selectedPlaylist]);
   
   // Effect to reload favorite channels when the page changes
-  useEffect(() => {
-    // Create abort controller for this effect
-    const abortController = new AbortController();
+  // useEffect(() => {
+  //   // Create abort controller for this effect
+  //   const abortController = new AbortController();
     
-    if (selectedGroup === 'Favorites' && 
-        selectedPlaylist?.id && 
-        favoriteCurrentPage !== prevFavoriteCurrentPageRef.current) {
+  //   if (selectedGroup === 'Favorites' && 
+  //       selectedPlaylist?.id && 
+  //       favoriteCurrentPage !== prevFavoriteCurrentPageRef.current) {
       
-      // Use modified version with abort signal
-      const loadWithAbort = async () => {
-        try {
-          if (!selectedPlaylist?.id) return;
+  //     // Use modified version with abort signal
+  //     const loadWithAbort = async () => {
+  //       try {
+  //         if (!selectedPlaylist?.id) return;
           
-          setIsSearching(true);
+  //         setIsSearching(true);
           
-          // Get favorite count with abort signal
-          const count = await favoriteService.getFavoriteChannelCount(
-            selectedPlaylist.id, 
-            { signal: abortController.signal }
-          );
+  //         // Get favorite count with abort signal
+  //         const count = await favoriteService.getFavoriteChannelCount(
+  //           selectedPlaylist.id, 
+  //           { signal: abortController.signal }
+  //         );
           
-          if (abortController.signal.aborted) return;
+  //         if (abortController.signal.aborted) return;
           
-          setFavoritesCount(count);
+  //         setFavoritesCount(count);
           
-          // Calculate pages
-          const pages = Math.ceil(count / channelsPerPage);
-          setFavoriteTotalPages(pages);
+  //         // Calculate pages
+  //         const pages = Math.ceil(count / channelsPerPage);
+  //         setFavoriteTotalPages(pages);
           
-          // Get favorites for current page with abort signal
-          const favorites = await favoriteService.getFavoriteChannels(
-            selectedPlaylist.id,
-            favoriteCurrentPage,
-            channelsPerPage,
-            { signal: abortController.signal }
-          );
+  //         // Get favorites for current page with abort signal
+  //         const favorites = await favoriteService.getFavoriteChannels(
+  //           selectedPlaylist.id,
+  //           favoriteCurrentPage,
+  //           channelsPerPage,
+  //           { signal: abortController.signal }
+  //         );
           
-          if (abortController.signal.aborted) return;
+  //         if (abortController.signal.aborted) return;
           
-          setFavoriteChannels(favorites);
-          setIsSearching(false);
-        } catch (error) {
-          if (!abortController.signal.aborted) {
-            console.error('Error loading favorites:', error);
-            setIsSearching(false);
-          }
-        }
-      };
+  //         setFavoriteChannels(favorites);
+  //         setIsSearching(false);
+  //       } catch (error) {
+  //         if (!abortController.signal.aborted) {
+  //           console.error('Error loading favorites:', error);
+  //           setIsSearching(false);
+  //         }
+  //       }
+  //     };
       
-      loadWithAbort();
-      prevFavoriteCurrentPageRef.current = favoriteCurrentPage;
-    }
+  //     loadWithAbort();
+  //     prevFavoriteCurrentPageRef.current = favoriteCurrentPage;
+  //   }
     
-    // Cleanup function to abort any pending requests when dependencies change
-    return () => {
-      abortController.abort();
-    };
-  }, [favoriteCurrentPage, selectedGroup, selectedPlaylist, channelsPerPage]);
+  //   // Cleanup function to abort any pending requests when dependencies change
+  //   return () => {
+  //     abortController.abort();
+  //   };
+  // }, [favoriteCurrentPage, selectedGroup, selectedPlaylist, channelsPerPage]);
   
   // Effect to trigger search when initialSearchTerm is provided on component mount
   useEffect(() => {
@@ -595,14 +572,14 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                     </div>
                     
                     <div 
-                      className={`favorite-toggle ${channelFavoriteStatus[channel.id] ? 'is-favorite' : ''}`}
+                      className={`favorite-toggle ${channel.favorite ? 'is-favorite' : ''}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleFavorite(channel);
                       }}
-                      title={channelFavoriteStatus[channel.id] ? "Remove from favorites" : "Add to favorites"}
+                      title={channel.favorite ? "Remove from favorites" : "Add to favorites"}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill={channelFavoriteStatus[channel.id] ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill={channel.favorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                       </svg>
                     </div>
@@ -682,14 +659,14 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                         </div>
                         
                         <div 
-                          className="favorite-toggle is-favorite"
+                          className={`favorite-toggle ${channel.favorite ? 'is-favorite' : ''}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleFavorite(channel);
                           }}
-                          title="Remove from favorites"
+                          title={channel.favorite ? "Remove from favorites" : "Add to favorites"}
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill={channel.favorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                           </svg>
                         </div>
@@ -732,7 +709,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                 <div className="channel-list-sidebar">
                   {channels.map(channel => (
                     <div
-                      key={channel.id}
+                      key={`favorite-${channel.id}`}
                       className={`channel-item-sidebar ${selectedChannel?.id === channel.id ? 'selected' : ''}`}
                     >
                       <div 
@@ -755,14 +732,14 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                       </div>
                       
                       <div 
-                        className={`favorite-toggle ${channelFavoriteStatus[channel.id] ? 'is-favorite' : ''}`}
+                        className={`favorite-toggle ${channel.favorite ? 'is-favorite' : ''}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleFavorite(channel);
                         }}
-                        title={channelFavoriteStatus[channel.id] ? "Remove from favorites" : "Add to favorites"}
+                        title={channel.favorite ? "Remove from favorites" : "Add to favorites"}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill={channelFavoriteStatus[channel.id] ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill={channel.favorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                         </svg>
                       </div>

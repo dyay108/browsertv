@@ -177,7 +177,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       
       if (isFavorite) {
         // Remove from favorites
-        await favoriteService.removeFromFavorites(channel.id, selectedPlaylist.id);
+        await favoriteService.removeFromFavorites(channel.id);
       } else {
         // Add to favorites
         await favoriteService.addToFavorites(channel.id, selectedPlaylist.id);
@@ -207,7 +207,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           const batchChannels = channelList.slice(i, i + BATCH_SIZE);
           
           for (const channel of batchChannels) {
-            const isFavorite = await favoriteService.isChannelFavorite(channel.id, selectedPlaylist.id);
+            const isFavorite = !!channel.favorite;
             statuses[channel.id] = isFavorite;
           }
         }

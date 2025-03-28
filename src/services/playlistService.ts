@@ -3,7 +3,7 @@ import { Playlist } from '../types/pocketbase-types';
 import { coreService } from './core';
 
 export const playlistService = {
-  async createPlaylist(name: string, content: string, url: string | null = null): Promise<Playlist> {
+  async createPlaylist(name: string, url: string | null = null): Promise<Playlist> {
     return await pb.collection('playlists').create({
       name,
       lastUsed: new Date().toISOString(),
@@ -31,10 +31,9 @@ export const playlistService = {
     return await pb.collection('playlists').delete(id);
   },
 
-  async updatePlaylist(id: string, name: string, content: string, url: string | null = null): Promise<Playlist> {
+  async updatePlaylist(id: string, name: string, url: string | null = null): Promise<Playlist> {
     return await pb.collection('playlists').update(id, {
       name,
-      content,
       lastUsed: new Date().toISOString(),
       url,
     }) as Playlist;

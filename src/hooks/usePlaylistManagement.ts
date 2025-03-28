@@ -64,7 +64,6 @@ export function usePlaylistManagement(): PlaylistHookResult {
         playlist = await playlistService.updatePlaylist(
           existingPlaylistId,
           name || 'Unnamed Playlist',
-          content,
           playlistUrl || null
         );
         console.log(`Updated existing playlist with ID: ${existingPlaylistId}`);
@@ -72,7 +71,6 @@ export function usePlaylistManagement(): PlaylistHookResult {
         // Create a new playlist
         playlist = await playlistService.createPlaylist(
           name || 'Unnamed Playlist',
-          content,
           playlistUrl || null
         );
         console.log(`Created new playlist with ID: ${playlist.id}`);

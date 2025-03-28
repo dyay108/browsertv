@@ -78,6 +78,11 @@ migrate((app) => {
         required: false,
       },
       {
+        name: "favorite",
+        type: "bool",
+        required: false,
+      },
+      {
         name: "playlist",
         type: "relation",
         required: true,
@@ -143,43 +148,6 @@ migrate((app) => {
     ],
   });
 
-  // Create favorites collection
-  const favoritesCollection = new Collection({
-    name: "favorites",
-    type: "base",
-    listRule: `@request.auth.id != "" && user.id = @request.auth.id`,
-    viewRule: `@request.auth.id != "" && user.id = @request.auth.id`,
-    createRule: `@request.auth.id != "" && user.id = @request.auth.id`,
-    updateRule: `@request.auth.id != "" && user.id = @request.auth.id`,
-    deleteRule: `@request.auth.id != "" && user.id = @request.auth.id`,
-    fields: [
-      {
-        name: "channel",
-        type: "relation",
-        required: true,
-        collectionId: channelsCollection.id,
-        cascadeDelete: true,
-        maxSelect: 1,
-      },
-      {
-        name: "playlist",
-        type: "relation",
-        required: true,
-        collectionId: playlistsCollection.id,
-        cascadeDelete: true,
-        maxSelect: 1,
-      },
-      {
-        name: "user",
-        type: "relation",
-        required: true,
-        collectionId: "_pb_users_auth_",
-        cascadeDelete: true,
-        maxSelect: 1,
-      },
-    ],
-  });
-
   // Create group_order collection
   const groupOrderCollection = new Collection({
     name: "group_order",
@@ -211,7 +179,6 @@ migrate((app) => {
   app.save(channelsCollection);
   app.save(groupsCollection);
   app.save(channelGroupsCollection);
-  app.save(favoritesCollection);
   app.save(groupOrderCollection);
 }, (app) => {
   // Revert all collection changes
@@ -219,6 +186,5 @@ migrate((app) => {
   app.delete(app.findCollectionByNameOrId("channels"));
   app.delete(app.findCollectionByNameOrId("groups"));
   app.delete(app.findCollectionByNameOrId("channel_groups"));
-  app.delete(app.findCollectionByNameOrId("favorites"));
   app.delete(app.findCollectionByNameOrId("group_order"));
 });
