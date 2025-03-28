@@ -105,32 +105,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
     }
   }, [searchCurrentPage, searchTerm, selectedPlaylist, debouncedSearch]);
   
-  // Toggle favorite status for a channel
-  const toggleFavorite = useCallback(async (channel: Channel) => {
-    if (!selectedPlaylist?.id) return;
-    
-    try {
-      const isFavorite = channel.favorite;
-      
-      if (isFavorite) {
-        await favoriteService.removeFromFavorites(channel.id);
-      } else {
-        await favoriteService.addToFavorites(channel.id, selectedPlaylist.id);
-      }
-      
-      // Update the channel object directly
-      channel.favorite = !isFavorite;
-      
-      // If we're viewing favorites, refresh the list
-      if (selectedGroup === 'Favorites') {
-        loadFavoriteChannels();
-      }
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-    }
-  }, [selectedPlaylist, selectedGroup]);
-  
-  // Load favorite channels
+  // Load favorite channels - declared first to avoid reference before declaration
   const loadFavoriteChannels = useCallback(async () => {
     if (!selectedPlaylist?.id) return;
     
@@ -156,6 +131,53 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       setIsSearching(false);
     }
   }, [favoriteCurrentPage, channelsPerPage, selectedPlaylist?.id]);
+  
+  // Toggle favorite status for a channel
+  const toggleFavorite = useCallback(async (channel: Channel) => {
+    if (!selectedPlaylist?.id) return;
+    
+    try {
+      const isFavorite = channel.favorite;
+      
+      if (isFavorite) {
+        await favoriteService.removeFromFavorites(channel.id);
+      } else {
+        await favoriteService.addToFavorites(channel.id, selectedPlaylist.id);
+      }
+      
+      // Update the channel object directly
+      channel.favorite = !isFavorite;
+      
+      // Create a new copy of the appropriate channel list to force UI update
+      if (isSearchMode) {
+        setSearchResults(prevResults => {
+          return prevResults.map(c => c.id === channel.id ? {...c, favorite: !isFavorite} : c);
+        });
+      } else if (selectedGroup !== 'Favorites') {
+        // For regular channel view, update the channels array to trigger re-render
+        // This creates a new array reference that will cause React to re-render
+        const updatedChannels = channels.map(c => 
+          c.id === channel.id ? {...c, favorite: !isFavorite} : c
+        );
+        // Force a re-render without modifying the original channels prop
+        setDisplayedChannels(updatedChannels);
+      }
+      
+      // If we're viewing favorites and removing a favorite, filter out the channel
+      if (selectedGroup === 'Favorites' && isFavorite) {
+        setFavoriteChannels(prevFavorites => prevFavorites.filter(c => c.id !== channel.id));
+        setFavoritesCount(prevCount => prevCount - 1);
+      } else if (selectedGroup === 'Favorites') {
+        // If adding to favorites while already in favorites view, refresh to see it
+        loadFavoriteChannels();
+      } else {
+        // Update favorites count even when not in favorites view
+        setFavoritesCount(prevCount => isFavorite ? prevCount - 1 : prevCount + 1);
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
+  }, [selectedPlaylist, selectedGroup, isSearchMode, channels, loadFavoriteChannels]);
   
   // Favorites pagination
   const loadNextFavoritePage = useCallback(() => {
@@ -202,7 +224,12 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   
   // Determine which view to show
   const isFavoritesMode = selectedGroup === 'Favorites';
-  const displayedChannels = isSearchMode ? searchResults : isFavoritesMode ? favoriteChannels : channels;
+  const [displayedChannels, setDisplayedChannels] = useState<Channel[]>([]);
+  
+  // Update displayed channels whenever the source changes
+  useEffect(() => {
+    setDisplayedChannels(isSearchMode ? searchResults : isFavoritesMode ? favoriteChannels : channels);
+  }, [isSearchMode, isFavoritesMode, searchResults, favoriteChannels, channels]);
   
   // Helper function to render channel items
   const renderChannelItem = (channel: Channel) => (
