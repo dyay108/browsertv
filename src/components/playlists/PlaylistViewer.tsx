@@ -36,9 +36,9 @@ const PlaylistViewer: React.FC<PlaylistViewerProps> = ({
   isDirectStreamMode = false
 }) => {
   // Use UI visibility hook for sidebar showing/hiding
-  const { 
-    sidebarVisible, 
-    setSidebarVisible, 
+  const {
+    sidebarVisible,
+    setSidebarVisible,
     showSidebar,
     startSidebarHideTimer,
     clearSidebarHideTimer
@@ -64,7 +64,7 @@ const PlaylistViewer: React.FC<PlaylistViewerProps> = ({
   return (
     <div className="fullscreen-player-container">
       {/* Video Player */}
-      <VideoPlayerContainer 
+      <VideoPlayerContainer
         selectedChannel={selectedChannel}
         initialStreamUrl={selectedChannel?.url || ''}
         isDirectStreamMode={isDirectStreamMode}
@@ -75,34 +75,36 @@ const PlaylistViewer: React.FC<PlaylistViewerProps> = ({
       />
 
       {/* Sidebar */}
-      <Sidebar 
-        playlistName={playlistName}
-        selectedPlaylist={selectedPlaylist}
-        visible={sidebarVisible}
-        onVisibilityChange={setSidebarVisible}
-        onChangePlaylist={onChangePlaylist}
-        onUpdatePlaylist={onUpdatePlaylist}
-        selectedGroup={selectedGroup}
-        groups={groups}
-        channels={channels}
-        onGroupSelect={handleGroupSelect}
-        groupChannelCounts={groupChannelCounts}
-        favoritesCount={favoritesCount}
-        onSortGroups={sortGroupsAlphabetically}
-        onDragEnd={handleDragEnd}
-        selectedChannel={selectedChannel}
-        onChannelSelect={onChannelSelect}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        totalChannelsInGroup={totalChannelsInGroup}
-        onNextPage={loadNextPage}
-        onPrevPage={loadPrevPage}
-        loading={loading}
-        playlistUrl={playlistUrl}
-        isUpdating={isUpdating}
-        startHideTimer={startSidebarHideTimer}
-        clearHideTimer={clearSidebarHideTimer}
-      />
+      {!isDirectStreamMode && (
+        <Sidebar
+          playlistName={playlistName}
+          selectedPlaylist={selectedPlaylist}
+          visible={sidebarVisible}
+          onVisibilityChange={setSidebarVisible}
+          onChangePlaylist={onChangePlaylist}
+          onUpdatePlaylist={onUpdatePlaylist}
+          selectedGroup={selectedGroup}
+          groups={groups}
+          channels={channels}
+          onGroupSelect={handleGroupSelect}
+          groupChannelCounts={groupChannelCounts}
+          favoritesCount={favoritesCount}
+          onSortGroups={sortGroupsAlphabetically}
+          onDragEnd={handleDragEnd}
+          selectedChannel={selectedChannel}
+          onChannelSelect={onChannelSelect}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalChannelsInGroup={totalChannelsInGroup}
+          onNextPage={loadNextPage}
+          onPrevPage={loadPrevPage}
+          loading={loading}
+          playlistUrl={playlistUrl}
+          isUpdating={isUpdating}
+          startHideTimer={startSidebarHideTimer}
+          clearHideTimer={clearSidebarHideTimer}
+        />
+      )}
     </div>
   );
 };

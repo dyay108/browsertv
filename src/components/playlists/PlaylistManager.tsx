@@ -48,7 +48,7 @@ const PlaylistManager: React.FC = () => {
   } = usePlaylistManagement();
 
   // Use stream control hook for direct streaming
-  const { playStream } = useSharedStreamControl(); 
+  const { playStream, clearStream: clearStreamHook } = useSharedStreamControl(); 
 
   // Fetch recent playlists from database
   const allRecentPlaylists = useLiveQuery(() => db.getRecentPlaylists(), []);
@@ -93,6 +93,7 @@ const PlaylistManager: React.FC = () => {
     setIsFileUploaded(false);
     setIsDirectStreamMode(false);
     setSelectedChannel(null);
+    clearStreamHook();
   }, []);
 
   // Handler for channel selection
