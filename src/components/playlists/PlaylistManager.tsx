@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Channel, Playlist } from '../../types/pocketbase-types';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { usePlaylistManagement } from '../../hooks/usePlaylistManagement';
-import { useStreamControl } from '../../hooks/useStreamControl';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,6 +11,7 @@ import DirectStreamInput from './DirectStreamInput';
 import RecentPlaylists from './RecentPlaylists';
 import PlaylistViewer from './PlaylistViewer';
 import { favoriteService, playlistService } from '../../services/pocketbaseService';
+import { useSharedStreamControl } from '../../contexts/streamContext';
 
 /**
  * Main component that manages playlist selection, file upload, and URL loading
@@ -58,7 +58,7 @@ const PlaylistManager: React.FC = () => {
   } = usePlaylistManagement();
 
   // Use stream control hook for direct streaming
-  const { playStream } = useStreamControl();
+  const { playStream, clearStream: clearStreamHook } = useSharedStreamControl(); 
 
   // Use a basic debounce for the getPlaylists function to prevent multiple calls
   const lastFetchTime = useRef(0);
@@ -157,7 +157,7 @@ const PlaylistManager: React.FC = () => {
     setIsFileUploaded(true);
     setIsDirectStreamMode(true);
     playStream(url);
-  }, [playStream]);
+  }, [playStream, setIsFileUploaded, setIsDirectStreamMode]);
 
   // Function to return to the main upload view
   const returnToMainView = useCallback(() => {
@@ -165,6 +165,7 @@ const PlaylistManager: React.FC = () => {
     setIsFileUploaded(false);
     setIsDirectStreamMode(false);
     setSelectedChannel(null);
+    clearStreamHook();
   }, []);
 
   // Handler for channel selection

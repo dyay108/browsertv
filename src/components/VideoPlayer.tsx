@@ -39,19 +39,94 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
   // Helper to determine if this is a force reconnect
   const isForceReconnect = src.includes('forceReload=true');
 
-  // Setup on mount - this runs once when the component mounts
-  useEffect(() => {
-    console.log('VideoPlayer mounted, src:', src);
+  // Create a stable version of key data that won't lead to unnecessary rerenders
+  const srcRef = useRef(src);
+  
+  // Generic utility to determine stream type - defined at component level scope
+  const getStreamType = (url: string): string => {
+    const lowerUrl = url.toLowerCase();
     
-    // Reset error state
-    setError(null);
-    
-    if (isForceReconnect) {
-      setReconnecting(true);
-      console.log('Force reconnect mode activated');
+    if (lowerUrl.includes('.m3u8') || lowerUrl.includes('playlist.m3u')) {
+      return 'hls';
+    } else if (lowerUrl.includes('.ts') || lowerUrl.includes('mpeg')) {
+      return 'mpegts';
+    } else if (lowerUrl.includes('.mp4')) {
+      return 'mp4';
+    } else if (lowerUrl.includes('rtmp://')) {
+      return 'rtmp';
+    } else {
+      // For IPTV, default to trying mpegts first
+      return 'mpegts';
+    }
+  };
+  
+  // Helper function declaration - must be defined before we use it in effects
+  const setupNewPlayer = () => {
+    if (!containerRef.current) {
+      console.error('Cannot setup player - container ref not available');
+      return;
     }
     
-    // Centralized cleanup function
+    // Ensure container is empty
+    while (containerRef.current.firstChild) {
+      containerRef.current.removeChild(containerRef.current.firstChild);
+    }
+    console.log('Container emptied completely');
+    
+    // Get current source from ref
+    const currentSrc = srcRef.current;
+    
+    // Determine stream type
+    const streamType = getStreamType(currentSrc);
+    console.log('Detected stream type:', streamType, 'for URL:', currentSrc);
+    
+    // Start player initialization sequence
+    // The rest of the initialization logic will be defined in the main effect
+    // and will be available via window.initializePlayer
+    if (typeof (window as any).initializePlayer === 'function') {
+      (window as any).initializePlayer();
+    } else {
+      console.error('Player initialization function not available yet');
+    }
+  };
+  
+  // Update the src ref and reinitialize player when src changes
+  useEffect(() => {
+    console.log(`VideoPlayer received new src: ${src}`);
+    srcRef.current = src;
+    
+    // Skip on first mount as the main effect will handle it
+    if (containerRef.current) {
+      console.log('Source changed, reinitializing player with new source');
+      
+      // Reference to cleanup function
+      const cleanupFn = (window as any).playerCleanup;
+      
+      // Clean up existing players first if the cleanup function exists
+      if (typeof cleanupFn === 'function') {
+        cleanupFn();
+      } else {
+        // Safety check - if somehow the cleanup function isn't available yet
+        console.warn('Warning: cleanup function not found, container might not be ready');
+        if (containerRef.current) {
+          // Basic fallback cleanup
+          containerRef.current.innerHTML = '';
+        }
+      }
+      
+      // Initialize player with new source after a slight delay to ensure cleanup completes
+      setTimeout(() => {
+        console.log('Initializing new player after source change');
+        setupNewPlayer();
+      }, 100);
+    }
+  }, [src]);
+  
+  // Main effect for player management - runs ONCE per mount
+  useEffect(() => {
+    console.log(`VideoPlayer MOUNTED, initializing player`);
+    
+    // Declare cleanup function early so it can be used in other effects
     const cleanup = () => {
       console.log('Cleaning up all players');
       
@@ -106,27 +181,27 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
       // Reset state
       setCurrentMethod(null);
     };
+    
+    // Make cleanup function globally available
+    (window as any).playerCleanup = cleanup;
+    
+    // Reset state
+    setError(null);
+    setCurrentMethod(null);
+    methodsTriedRef.current = [];
+    successRef.current = false;
+    
+    if (isForceReconnect) {
+      setReconnecting(true);
+      console.log('Force reconnect mode activated');
+    }
 
-    // Guess stream type
-    const getStreamType = (url: string): string => {
-      const lowerUrl = url.toLowerCase();
-      
-      if (lowerUrl.includes('.m3u8') || lowerUrl.includes('playlist.m3u')) {
-        return 'hls';
-      } else if (lowerUrl.includes('.ts') || lowerUrl.includes('mpeg')) {
-        return 'mpegts';
-      } else if (lowerUrl.includes('.mp4')) {
-        return 'mp4';
-      } else if (lowerUrl.includes('rtmp://')) {
-        return 'rtmp';
-      } else {
-        // For IPTV, default to trying mpegts first
-        return 'mpegts';
-      }
-    };
+    // getStreamType is now defined at component level scope
 
-    // Main initialization function
+    // Main initialization function - always uses the latest src from ref
     const initializePlayer = () => {
+      // Always use the current src from ref
+      const currentSrc = srcRef.current;
       if (!containerRef.current) {
         console.error('Container ref not available');
         return;
@@ -143,9 +218,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
         console.log('Container emptied completely');
       }
       
-      // Determine stream type
-      const streamType = getStreamType(src);
-      console.log('Detected stream type:', streamType);
+      // Determine stream type - use the current src from ref
+      const streamType = getStreamType(currentSrc);
+      console.log('Detected stream type:', streamType, 'for URL:', currentSrc);
       
       // Try different playback methods based on stream type
       const tryMethod = (method: string) => {
@@ -325,7 +400,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
             preload: 'auto',
             fluid: true,
             sources: [{
-              src: src,
+              src: currentSrc,
               type: streamType === 'hls' ? 'application/x-mpegURL' : 
                     streamType === 'mpegts' ? 'video/MP2T' : 
                     'video/mp4'
@@ -398,7 +473,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
             fragLoadingMaxRetry: 5
           });
           
-          hlsInstance.current.loadSource(src);
+          hlsInstance.current.loadSource(currentSrc);
           hlsInstance.current.attachMedia(videoElement.current);
           
           hlsInstance.current.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -468,7 +543,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
           // Create mpegts.js player
           mpegtsPlayer.current = mpegts.createPlayer({
             type: 'mpegts',
-            url: src,
+            url: currentSrc,
             isLive: true,
             cors: true
           });
@@ -528,8 +603,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
         videoElement.current = video;
         
         try {
-          // Set source directly
-          videoElement.current.src = src;
+          // Set source directly - always use the current src from ref
+          videoElement.current.src = currentSrc;
           
           // Attempt to play
           videoElement.current.play().catch(e => {
@@ -547,20 +622,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
       }
     };
     
-    // Initialize with delay for force reconnect
-    if (isForceReconnect) {
-      setTimeout(() => {
-        initializePlayer();
-        // Turn off reconnecting state after delay
-        setTimeout(() => setReconnecting(false), 2000);
-      }, 500);
-    } else {
-      initializePlayer();
-    }
+    // Make initializePlayer globally available so other effects can use it
+    (window as any).initializePlayer = initializePlayer;
     
-    // Cleanup on unmount
-    return cleanup;
-  }, [src]);
+    // Initialize the player once at mount time
+    console.log(`Initial player initialization with src: ${srcRef.current}`, { container: !!containerRef.current });
+    
+    // Simple delay for force reconnect
+    const initialDelay = isForceReconnect ? 500 : 0;
+    
+    // Use timeout for initial setup
+    const timeoutId = setTimeout(() => {
+      // Call our own copy directly (not through window)
+      initializePlayer();
+      
+      // Turn off reconnecting state after initial setup if needed
+      if (isForceReconnect) {
+        setTimeout(() => setReconnecting(false), 2000);
+      }
+    }, initialDelay);
+    
+    // Comprehensive cleanup on unmount
+    return () => {
+      console.log('VideoPlayer UNMOUNTING, cleaning up resources');
+      clearTimeout(timeoutId);
+      
+      // Run the cleanup function to ensure all players are properly disposed
+      cleanup();
+      
+      // Remove global references
+      delete (window as any).playerCleanup;
+      delete (window as any).initializePlayer;
+    };
+  }, []); // Empty dependency array - only run ONCE per mount/unmount
 
   return (
     <div className="player-wrapper">

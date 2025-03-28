@@ -3,8 +3,8 @@ import VideoPlayer from '../VideoPlayer';
 import NowPlayingInfo from './NowPlayingInfo';
 import StreamControls from './StreamControls';
 import { Channel } from '../../types/pocketbase-types';
-import { useStreamControl } from '../../hooks/useStreamControl';
 import { useUiVisibility } from '../../hooks/useUiVisibility';
+import { useSharedStreamControl } from '../../contexts/streamContext';
 
 interface VideoPlayerContainerProps {
   selectedChannel: Channel | null;
@@ -36,8 +36,8 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
     retryStream, 
     forceReconnect, 
     clearStream: clearStreamHook,
-    setCurrentStream 
-  } = useStreamControl(initialStreamUrl);
+    // setCurrentStream 
+  } = useSharedStreamControl();
   
   // Enhanced clear stream function that also clears the selected channel
   const clearStream = useCallback(() => {
@@ -66,16 +66,23 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
     showUIElements
   } = useUiVisibility();
 
-  // When initialStreamUrl changes, update the current stream
+  // Track mount/unmount for debugging
   useEffect(() => {
-    if (initialStreamUrl && initialStreamUrl !== currentStream) {
-      setCurrentStream(initialStreamUrl);
-    }
-  }, [initialStreamUrl, currentStream, setCurrentStream]);
+    console.log('VideoPlayerContainer MOUNTED');
+    return () => {
+      console.log('VideoPlayerContainer UNMOUNTING, state:', { 
+        hasCurrentStream: !!currentStream, 
+        key, 
+        loading
+      });
+    };
+  }, []);
 
   // Effect to hide UI elements after delay when stream is playing
   useEffect(() => {
     if (currentStream) {
+      console.log('Setting up UI control for stream:', currentStream);
+      
       // Initial hide after mount
       hideUIElementsWithDelay();
       
@@ -96,15 +103,19 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
 
   return (
     <div className="player-fullscreen">
-      {/* Reconnecting overlay */}
-      {isLoadingChannels && (
+      {/* Loading overlay - show during load */}
+      {(isLoadingChannels && !isDirectStreamMode) || loading  ? (
         <div className="loading-overlay">
           <div className="loading-spinner"></div>
-          <p>Loading Channels...</p>
+          <p>
+            {isLoadingChannels ? "Loading Channels..." :
+             "Loading Stream..."}
+          </p>
         </div>
-      )}
-      {currentStream ? (
-        <div className="player-container" key={`container-${key}`}>
+      ) : null}
+      
+      {(currentStream) ? (
+        <div className="player-container">
           {selectedChannel && !isDirectStreamMode && (
             <NowPlayingInfo
               channel={selectedChannel}
@@ -113,10 +124,9 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
             />
           )}
 
-          <VideoPlayer
-            key={`player-${key}`}
-            src={currentStream}
-          />
+          <div className="player-mount-point">
+            <VideoPlayer src={currentStream} />
+          </div>
 
           <StreamControls
             onRetry={retryStream}

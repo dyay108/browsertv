@@ -26,28 +26,28 @@ export function useStreamControl(initialStream = ''): StreamControlHookResult {
   const playStream = useCallback((url: string) => {
     if (!url.trim()) return;
 
-    // Set loading state
+    console.log('playStream called with URL:', url);
+    
+    // Set states to indicate loading
     setLoading(true);
 
-    // Force a complete player reset
-    setCurrentStream('');
-    setKey(0);
+    // Make sure we have a unique key that's never 0
+    const newKey = Date.now();
+    console.log('Setting player key:', newKey);
 
-    // Use a timeout to ensure the component has fully unmounted
+    // Apply the stream URL immediately
+    setCurrentStream(url);
+    
+    // Then update key after a tiny delay to ensure state batching
     setTimeout(() => {
-      // Generate a completely new key - use a truly unique value
-      const newKey = Date.now() + Math.floor(Math.random() * 10000);
-      console.log('Creating new player with key:', newKey);
-
-      // First set the key to ensure proper mounting
       setKey(newKey);
-
-      // Then set stream URL after another short delay
+      
+      // Clear loading states after the change is complete
       setTimeout(() => {
-        setCurrentStream(url);
         setLoading(false);
-      }, 200);
-    }, 200);
+        console.log('Stream change completed');
+      }, 1500);
+    }, 10);
   }, []);
 
   // Retry current stream with cache-busting
@@ -80,43 +80,36 @@ export function useStreamControl(initialStream = ''): StreamControlHookResult {
     if (!currentStream) return;
 
     console.log('Force reconnect initiated');
+    
+    // Set states to indicate loading
     setLoading(true);
 
-    // STEP 1: Completely unmount player by clearing stream and key
-    setCurrentStream('');
-    setKey(0);
+    // Get clean base URL by stripping parameters
+    const baseUrl = currentStream.split('?')[0];
 
-    // STEP 2: Wait for unmount to complete
+    // Add enhanced cache busting parameters
+    const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    const freshUrl = `${baseUrl}?_=${uniqueId}&forceReload=true&allowStale=false&nocache=true&r=${Math.random()}`;
+
+    console.log('Prepared reconnection URL:', freshUrl);
+
+    // Generate new key using timestamp only for stability
+    const newKey = Date.now();
+    console.log('Setting new player key:', newKey);
+    
+    // Apply URL change first
+    setCurrentStream(freshUrl);
+    
+    // Then update key after a tiny delay to ensure proper state batching
     setTimeout(() => {
-      console.log('Player unmounted, preparing new connection');
-
-      // Get clean base URL by stripping parameters
-      const baseUrl = currentStream.split('?')[0];
-
-      // Add enhanced cache busting parameters
-      const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-      const freshUrl = `${baseUrl}?_=${uniqueId}&forceReload=true&allowStale=false&nocache=true&r=${Math.random()}`;
-
-      console.log('Prepared reconnection URL:', freshUrl);
-
-      // STEP 3: Generate new key and set it
-      const newKey = Date.now() + Math.floor(Math.random() * 100000);
-      console.log('Setting new player key:', newKey);
       setKey(newKey);
-
-      // STEP 4: After key change has processed, set the stream URL
+      
+      // Clear loading states after the change is complete
       setTimeout(() => {
-        console.log('Applying new stream URL');
-        setCurrentStream(freshUrl);
-
-        // STEP 5: Finally, mark loading as complete
-        setTimeout(() => {
-          setLoading(false);
-          console.log('Force reconnect complete');
-        }, 300);
-      }, 300);
-    }, 500); // Longer delay to ensure complete unmount
-
+        setLoading(false);
+        console.log('Force reconnect complete');
+      }, 1500);
+    }, 10);
   }, [currentStream]);
 
   // Clear the current stream
@@ -127,11 +120,23 @@ export function useStreamControl(initialStream = ''): StreamControlHookResult {
   }, []);
 
   // When initialStream changes from outside, update currentStream
+  // But avoid including currentStream in dependencies to prevent circular updates
   useEffect(() => {
-    if (initialStream !== currentStream) {
+    // First mount initialization
+    if (initialStream && !currentStream) {
       setCurrentStream(initialStream);
     }
-  }, [initialStream, currentStream]);
+  }, []); // Empty deps - only run on mount
+  
+  // Handle external changes to initialStream
+  useEffect(() => {
+    // Skip if this is the initial value or empty value
+    if (initialStream && initialStream !== currentStream) {
+      console.log('External initialStream change detected:', initialStream);
+      // Use playStream instead of direct state update to ensure proper key handling
+      playStream(initialStream);
+    }
+  }, [initialStream]); // Only depend on initialStream
 
   return {
     currentStream,

@@ -6,6 +6,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import NotFound from './components/common/NotFound';
+import { StreamProvider } from './contexts/streamContext';
 
 /**
  * Main App component that serves as the application root
@@ -14,6 +15,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+      <StreamProvider> 
         <div className="App">
           <Routes>
             {/* Auth routes */}
@@ -37,6 +39,7 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
+        </StreamProvider> 
       </AuthProvider>
     </Router>
   );
