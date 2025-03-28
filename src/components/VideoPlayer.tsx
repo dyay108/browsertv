@@ -39,9 +39,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
   // Helper to determine if this is a force reconnect
   const isForceReconnect = src.includes('forceReload=true');
 
-  // Setup on mount - this runs once when the component mounts
+  // Create a stable version of key data that won't lead to unnecessary rerenders
+  const srcRef = useRef(src);
+  
+  // Only update ref for logging
   useEffect(() => {
-    console.log(`VideoPlayer mounted with src:`, src);
+    console.log(`VideoPlayer received new src: ${src}`);
+    srcRef.current = src;
+  }, [src]);
+  
+  // Main effect for player management - runs ONCE per mount
+  useEffect(() => {
+    console.log(`VideoPlayer MOUNTED, initializing player`);
     
     // Reset state
     setError(null);
@@ -128,8 +137,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
       }
     };
 
-    // Main initialization function
+    // Main initialization function - always uses the latest src from ref
     const initializePlayer = () => {
+      // Always use the current src from ref
+      const currentSrc = srcRef.current;
       if (!containerRef.current) {
         console.error('Container ref not available');
         return;
@@ -146,9 +157,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
         console.log('Container emptied completely');
       }
       
-      // Determine stream type
-      const streamType = getStreamType(src);
-      console.log('Detected stream type:', streamType);
+      // Determine stream type - use the current src from ref
+      const streamType = getStreamType(currentSrc);
+      console.log('Detected stream type:', streamType, 'for URL:', currentSrc);
       
       // Try different playback methods based on stream type
       const tryMethod = (method: string) => {
@@ -550,23 +561,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
       }
     };
     
-    // Initialize with delay for force reconnect
-    if (isForceReconnect) {
-      setTimeout(() => {
-        initializePlayer();
-        // Turn off reconnecting state after delay
-        setTimeout(() => setReconnecting(false), 2000);
-      }, 500);
-    } else {
-      initializePlayer();
-    }
+    // Timeouts for initialization and cleanup
+    let reconnectTimeoutId: NodeJS.Timeout | null = null;
     
-    // Cleanup on unmount
+    // Use a single approach that respects force reconnect
+    const timeoutId = setTimeout(() => {
+      console.log(`Initializing player with src: ${srcRef.current}`);
+      initializePlayer();
+      
+      // Turn off reconnecting state after a delay if needed
+      if (isForceReconnect) {
+        reconnectTimeoutId = setTimeout(() => setReconnecting(false), 2000);
+      }
+    }, isForceReconnect ? 500 : 0);
+    
+    // Comprehensive cleanup on unmount
     return () => {
-      console.log('VideoPlayer unmounting, cleaning up resources');
+      console.log('VideoPlayer UNMOUNTING, cleaning up resources');
+      clearTimeout(timeoutId);
+      if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
       cleanup();
     };
-  }, [src, containerRef.current]);
+  }, []); // Empty dependency array - only run ONCE per mount/unmount
 
   return (
     <div className="player-wrapper">

@@ -120,11 +120,23 @@ export function useStreamControl(initialStream = ''): StreamControlHookResult {
   }, []);
 
   // When initialStream changes from outside, update currentStream
+  // But avoid including currentStream in dependencies to prevent circular updates
   useEffect(() => {
-    if (initialStream !== currentStream) {
+    // First mount initialization
+    if (initialStream && !currentStream) {
       setCurrentStream(initialStream);
     }
-  }, [initialStream, currentStream]);
+  }, []); // Empty deps - only run on mount
+  
+  // Handle external changes to initialStream
+  useEffect(() => {
+    // Skip if this is the initial value or empty value
+    if (initialStream && initialStream !== currentStream) {
+      console.log('External initialStream change detected:', initialStream);
+      // Use playStream instead of direct state update to ensure proper key handling
+      playStream(initialStream);
+    }
+  }, [initialStream]); // Only depend on initialStream
 
   return {
     currentStream,
