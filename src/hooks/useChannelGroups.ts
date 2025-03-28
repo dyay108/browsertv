@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { channelService, groupService, favoriteService } from '../services/pocketbaseService';
 import { Channel, Playlist } from '../types/pocketbase-types';
+import { channelService, favoriteService, groupService } from '../services';
 
 interface ChannelGroupsHookResult {
   // Group state

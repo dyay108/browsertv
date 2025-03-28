@@ -6,7 +6,7 @@ import SearchPanel from '../channels/SearchPanel';
 import { debounce } from '../../utils/debounce';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { channelService, favoriteService } from '../../services/pocketbaseService';
+import { channelService, favoriteService } from '../../services';
 
 interface SidebarProps {
   playlistName: string;

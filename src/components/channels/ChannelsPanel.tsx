@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Channel, Playlist } from '../../types/pocketbase-types';
 import { debounce } from '../../utils/debounce';
-import { channelService, favoriteService } from '../../services/pocketbaseService';
+import { channelService, favoriteService } from '../../services';
 
 interface ChannelsPanelProps {
   selectedGroup: string;

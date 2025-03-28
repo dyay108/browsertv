@@ -10,8 +10,8 @@ import UrlPlaylistLoader from './UrlPlaylistLoader';
 import DirectStreamInput from './DirectStreamInput';
 import RecentPlaylists from './RecentPlaylists';
 import PlaylistViewer from './PlaylistViewer';
-import { favoriteService, playlistService } from '../../services/pocketbaseService';
 import { useSharedStreamControl } from '../../contexts/streamContext';
+import { favoriteService, playlistService } from '../../services';
 
 /**
  * Main component that manages playlist selection, file upload, and URL loading

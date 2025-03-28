@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import { playlistService, parseM3UContent } from '../services/pocketbaseService';
 import { Playlist } from '../types/pocketbase-types';
 import { prepareProxyUrl } from '../utils/m3uParser';
+import { parseM3UContent, playlistService } from '../services';
 
 interface PlaylistHookResult {
   selectedPlaylist: Playlist | null;
