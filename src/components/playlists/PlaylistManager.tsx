@@ -308,6 +308,7 @@ const PlaylistManager: React.FC = () => {
           onChangePlaylist={returnToMainView}
           onUpdatePlaylist={handleUpdatePlaylist}
           favoritesCount={favoritesCount}
+          onFavoritesCountChange={setFavoritesCount}
           isDirectStreamMode={isDirectStreamMode}
         />
       )}

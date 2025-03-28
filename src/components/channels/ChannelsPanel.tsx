@@ -19,6 +19,7 @@ interface ChannelsPanelProps {
   initialSearchTerm?: string;  // Search term coming from groups panel
   onSearchTermChange?: (searchTerm: string) => void; // Update search term in parent
   onClearSearch?: () => void; // Clear search in parent
+  onFavoritesCountChange?: (count: number) => void; // Notify parent of favorites count change
 }
 
 /**
@@ -37,7 +38,8 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   onNextPage,
   onPrevPage,
   initialSearchTerm = '',
-  onSearchTermChange
+  onSearchTermChange,
+  onFavoritesCountChange
 }) => {
   // Search state
   const [searchTerm, setLocalSearchTerm] = useState(initialSearchTerm);
@@ -117,6 +119,11 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       setFavoritesCount(count);
       setFavoriteTotalPages(Math.ceil(count / channelsPerPage));
       
+      // Notify parent component about updated count
+      if (onFavoritesCountChange) {
+        onFavoritesCountChange(count);
+      }
+      
       // Get favorites for current page
       const favorites = await favoriteService.getFavoriteChannels(
         selectedPlaylist.id,
@@ -130,7 +137,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
     } finally {
       setIsSearching(false);
     }
-  }, [favoriteCurrentPage, channelsPerPage, selectedPlaylist?.id]);
+  }, [favoriteCurrentPage, channelsPerPage, selectedPlaylist?.id, onFavoritesCountChange]);
   
   // Toggle favorite status for a channel
   const toggleFavorite = useCallback(async (channel: Channel) => {
@@ -163,16 +170,42 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
         setDisplayedChannels(updatedChannels);
       }
       
-      // If we're viewing favorites and removing a favorite, filter out the channel
-      if (selectedGroup === 'Favorites' && isFavorite) {
-        setFavoriteChannels(prevFavorites => prevFavorites.filter(c => c.id !== channel.id));
-        setFavoritesCount(prevCount => prevCount - 1);
-      } else if (selectedGroup === 'Favorites') {
-        // If adding to favorites while already in favorites view, refresh to see it
-        loadFavoriteChannels();
+      // Update the favorites count regardless of view
+      // This ensures the count is always accurate across views
+      if (isFavorite) {
+        // Removing from favorites
+        setFavoritesCount(prevCount => Math.max(0, prevCount - 1));
+        
+        // If we're in favorites view, also remove from the displayed list
+        if (selectedGroup === 'Favorites') {
+          setFavoriteChannels(prevFavorites => 
+            prevFavorites.filter(c => c.id !== channel.id)
+          );
+        }
       } else {
-        // Update favorites count even when not in favorites view
-        setFavoritesCount(prevCount => isFavorite ? prevCount - 1 : prevCount + 1);
+        // Adding to favorites
+        setFavoritesCount(prevCount => prevCount + 1);
+        
+        // If we're in favorites view, reload to show the new favorite
+        if (selectedGroup === 'Favorites') {
+          loadFavoriteChannels();
+        }
+      }
+      
+      // Always fetch the latest total count after toggling
+      // This ensures our count is accurate and synchronized with the database
+      if (selectedPlaylist?.id) {
+        try {
+          const updatedCount = await favoriteService.getFavoriteChannelCount(selectedPlaylist.id);
+          setFavoritesCount(updatedCount);
+          
+          // Notify parent component of the updated count
+          if (onFavoritesCountChange) {
+            onFavoritesCountChange(updatedCount);
+          }
+        } catch (error) {
+          console.error('Error getting updated favorite count:', error);
+        }
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
@@ -196,9 +229,30 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   useEffect(() => {
     const abortController = new AbortController();
     
-    if (selectedGroup === 'Favorites' && selectedPlaylist?.id) {
-      loadFavoriteChannels();
-    }
+    const loadData = async () => {
+      if (selectedGroup === 'Favorites' && selectedPlaylist?.id) {
+        // Load favorites channels
+        loadFavoriteChannels();
+        
+        // Always update the favorites count, even when not in favorites view
+        // This ensures the count stays in sync
+        try {
+          const count = await favoriteService.getFavoriteChannelCount(
+            selectedPlaylist.id,
+            { signal: abortController.signal }
+          );
+          if (!abortController.signal.aborted) {
+            setFavoritesCount(count);
+          }
+        } catch (error) {
+          if (!abortController.signal.aborted) {
+            console.error('Error getting favorites count:', error);
+          }
+        }
+      }
+    };
+    
+    loadData();
     
     return () => {
       abortController.abort();
@@ -221,6 +275,40 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       debouncedSearch(initialSearchTerm, selectedPlaylist.id, 1);
     }
   }, [initialSearchTerm, selectedPlaylist, debouncedSearch]);
+  
+  // Effect to keep favorites count up-to-date whenever the playlist changes
+  useEffect(() => {
+    const abortController = new AbortController();
+    
+    const updateFavoritesCount = async () => {
+      if (selectedPlaylist?.id) {
+        try {
+          const count = await favoriteService.getFavoriteChannelCount(
+            selectedPlaylist.id,
+            { signal: abortController.signal }
+          );
+          if (!abortController.signal.aborted) {
+            setFavoritesCount(count);
+            
+            // Notify parent component about updated count
+            if (onFavoritesCountChange && !abortController.signal.aborted) {
+              onFavoritesCountChange(count);
+            }
+          }
+        } catch (error) {
+          if (!abortController.signal.aborted) {
+            console.error('Error updating favorites count:', error);
+          }
+        }
+      }
+    };
+    
+    updateFavoritesCount();
+    
+    return () => {
+      abortController.abort();
+    };
+  }, [selectedPlaylist, onFavoritesCountChange]);
   
   // Determine which view to show
   const isFavoritesMode = selectedGroup === 'Favorites';

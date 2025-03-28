@@ -35,6 +35,7 @@ interface SidebarProps {
   isUpdating: boolean;
   startHideTimer: () => void;
   clearHideTimer: () => void;
+  onFavoritesCountChange?: (count: number) => void;
 }
 
 /**
@@ -66,7 +67,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   playlistUrl,
   isUpdating,
   startHideTimer,
-  clearHideTimer
+  clearHideTimer,
+  onFavoritesCountChange
 }) => {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -319,7 +321,18 @@ const Sidebar: React.FC<SidebarProps> = ({
             selectedChannel={selectedChannel}
             favoriteStatus={channelFavoriteStatus}
             onChannelSelect={onChannelSelect}
-            onToggleFavorite={toggleFavorite}
+            onToggleFavorite={async (channel) => {
+              await toggleFavorite(channel);
+              // After toggling a favorite, update the favorites count
+              if (selectedPlaylist?.id && onFavoritesCountChange) {
+                try {
+                  const count = await favoriteService.getFavoriteChannelCount(selectedPlaylist.id);
+                  onFavoritesCountChange(count);
+                } catch (error) {
+                  console.error('Error updating favorites count:', error);
+                }
+              }
+            }}
             isSearching={isSearching}
             searchCurrentPage={searchCurrentPage}
             searchTotalPages={searchTotalPages}
@@ -362,6 +375,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               initialSearchTerm=""  // No need to pass search term, as we handle it at Sidebar level
               onSearchTermChange={setSearchTerm}
               onClearSearch={handleClearSearch}
+              onFavoritesCountChange={(count) => {
+                // Update the favoritesCount in the parent component
+                if (favoritesCount !== count && onFavoritesCountChange) {
+                  onFavoritesCountChange(count);
+                }
+              }}
             />
           )
         )}

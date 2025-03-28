@@ -16,6 +16,7 @@ interface PlaylistViewerProps {
   onChangePlaylist: () => void;
   onUpdatePlaylist: () => void;
   favoritesCount: number;
+  onFavoritesCountChange?: (count: number) => void;
   isDirectStreamMode?: boolean;
 }
 
@@ -33,6 +34,7 @@ const PlaylistViewer: React.FC<PlaylistViewerProps> = ({
   onChangePlaylist,
   onUpdatePlaylist,
   favoritesCount,
+  onFavoritesCountChange,
   isDirectStreamMode = false
 }) => {
   // Use UI visibility hook for sidebar showing/hiding
@@ -105,6 +107,7 @@ const PlaylistViewer: React.FC<PlaylistViewerProps> = ({
           isUpdating={isUpdating}
           startHideTimer={startSidebarHideTimer}
           clearHideTimer={clearSidebarHideTimer}
+          onFavoritesCountChange={onFavoritesCountChange}
         />
       )}
     </div>
