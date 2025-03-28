@@ -197,7 +197,7 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   }, [favoriteCurrentPage]);
   
   // Load favorite statuses for displayed channels
-  const loadFavoriteStatuses = useCallback(async (channelList: Channel[], playlistId: string) => {
+  const loadFavoriteStatuses = useCallback(async (channelList: Channel[], playlistId: string, abortSignal?: AbortSignal) => {
     if (!playlistId || channelList.length === 0) return;
     
     try {
@@ -206,78 +206,221 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       // Process in batches to avoid excessive DB calls
       const BATCH_SIZE = 50;
       for (let i = 0; i < channelList.length; i += BATCH_SIZE) {
+        // Check if operation was aborted before continuing
+        if (abortSignal?.aborted) return;
+        
         const batchChannels = channelList.slice(i, i + BATCH_SIZE);
         
-        for (const channel of batchChannels) {
-          const isFavorite = await favoriteService.isChannelFavorite(channel.id, playlistId);
-          statuses[channel.id] = isFavorite;
+        // Fetch all favorite statuses in parallel instead of sequentially
+        const statusPromises = batchChannels.map(channel => 
+          favoriteService.isChannelFavorite(channel.id, playlistId, { signal: abortSignal })
+            .then(isFavorite => ({ channelId: channel.id, isFavorite }))
+            .catch(error => {
+              // Only log error if not aborted
+              if (!abortSignal?.aborted) {
+                console.error(`Error checking favorite status for channel ${channel.id}:`, error);
+              }
+              return { channelId: channel.id, isFavorite: false };
+            })
+        );
+        
+        const results = await Promise.all(statusPromises);
+        
+        // Check if operation was aborted after batch completes
+        if (abortSignal?.aborted) return;
+        
+        // Process results
+        for (const { channelId, isFavorite } of results) {
+          statuses[channelId] = isFavorite;
         }
       }
       
-      setChannelFavoriteStatus(prev => ({
-        ...prev,
-        ...statuses
-      }));
+      // Only update state if not aborted
+      if (!abortSignal?.aborted) {
+        setChannelFavoriteStatus(prev => ({
+          ...prev,
+          ...statuses
+        }));
+      }
     } catch (error) {
-      console.error('Error loading favorite statuses:', error);
+      if (!abortSignal?.aborted) {
+        console.error('Error loading favorite statuses:', error);
+      }
     }
   }, []);
   
   // Load favorites when viewing Favorites group
   useEffect(() => {
+    // Create abort controller for this effect
+    const abortController = new AbortController();
+    
     // Only run when the selectedGroup changes to 'Favorites'
     if (selectedGroup === 'Favorites' && 
         selectedPlaylist?.id && 
         (prevSelectedGroupRef.current !== 'Favorites' || 
          prevSelectedPlaylistId.current !== selectedPlaylist.id)) {
       
-      loadFavoriteChannels(selectedPlaylist.id);
+      // Modify loadFavoriteChannels to accept abort signal
+      const loadWithAbort = async () => {
+        try {
+          if (!selectedPlaylist?.id) return;
+          
+          setIsSearching(true);
+          
+          // Get favorite count with abort signal
+          const count = await favoriteService.getFavoriteChannelCount(
+            selectedPlaylist.id, 
+            { signal: abortController.signal }
+          );
+          
+          if (abortController.signal.aborted) return;
+          
+          setFavoritesCount(count);
+          
+          // Calculate pages
+          const pages = Math.ceil(count / channelsPerPage);
+          setFavoriteTotalPages(pages);
+          
+          // Get favorites for current page with abort signal
+          const favorites = await favoriteService.getFavoriteChannels(
+            selectedPlaylist.id,
+            favoriteCurrentPage,
+            channelsPerPage,
+            { signal: abortController.signal }
+          );
+          
+          if (abortController.signal.aborted) return;
+          
+          setFavoriteChannels(favorites);
+          setIsSearching(false);
+        } catch (error) {
+          if (!abortController.signal.aborted) {
+            console.error('Error loading favorites:', error);
+            setIsSearching(false);
+          }
+        }
+      };
+      
+      loadWithAbort();
     }
     
     // Update refs
     prevSelectedGroupRef.current = selectedGroup;
     prevSelectedPlaylistId.current = selectedPlaylist?.id || null;
-  }, [selectedGroup, selectedPlaylist, loadFavoriteChannels]);
+    
+    // Cleanup function to abort any pending requests when dependencies change
+    return () => {
+      abortController.abort();
+    };
+  }, [selectedGroup, selectedPlaylist, loadFavoriteChannels, favoriteCurrentPage, channelsPerPage]);
   
   // Load favorite statuses for regular channels
   useEffect(() => {
+    // Create abort controller for this effect
+    const abortController = new AbortController();
+    
     // Check if channels have changed by comparing lengths and first channel ID
     const channelsChanged = channels.length !== prevChannelsRef.current.length || 
                           (channels.length > 0 && prevChannelsRef.current.length > 0 && 
                            channels[0].id !== prevChannelsRef.current[0].id);
     
     if (channels.length > 0 && selectedPlaylist?.id && channelsChanged) {
-      loadFavoriteStatuses(channels, selectedPlaylist.id);
+      loadFavoriteStatuses(channels, selectedPlaylist.id, abortController.signal);
       prevChannelsRef.current = channels;
     }
+    
+    // Cleanup function to abort any pending requests when dependencies change
+    return () => {
+      abortController.abort();
+    };
   }, [channels, loadFavoriteStatuses, selectedPlaylist]);
   
   // Load favorite statuses for search results
   useEffect(() => {
+    // Create abort controller for this effect
+    const abortController = new AbortController();
+    
     // Check if search results have changed
     const searchResultsChanged = searchResults.length !== prevSearchResultsRef.current.length || 
                                (searchResults.length > 0 && prevSearchResultsRef.current.length > 0 && 
                                 searchResults[0].id !== prevSearchResultsRef.current[0].id);
     
     if (searchResults.length > 0 && selectedPlaylist?.id && searchResultsChanged) {
-      loadFavoriteStatuses(searchResults, selectedPlaylist.id);
+      loadFavoriteStatuses(searchResults, selectedPlaylist.id, abortController.signal);
       prevSearchResultsRef.current = searchResults;
     }
+    
+    // Cleanup function to abort any pending requests when dependencies change
+    return () => {
+      abortController.abort();
+    };
   }, [searchResults, loadFavoriteStatuses, selectedPlaylist]);
   
   // Effect to reload favorite channels when the page changes
   useEffect(() => {
+    // Create abort controller for this effect
+    const abortController = new AbortController();
+    
     if (selectedGroup === 'Favorites' && 
         selectedPlaylist?.id && 
         favoriteCurrentPage !== prevFavoriteCurrentPageRef.current) {
       
-      loadFavoriteChannels(selectedPlaylist.id);
+      // Use modified version with abort signal
+      const loadWithAbort = async () => {
+        try {
+          if (!selectedPlaylist?.id) return;
+          
+          setIsSearching(true);
+          
+          // Get favorite count with abort signal
+          const count = await favoriteService.getFavoriteChannelCount(
+            selectedPlaylist.id, 
+            { signal: abortController.signal }
+          );
+          
+          if (abortController.signal.aborted) return;
+          
+          setFavoritesCount(count);
+          
+          // Calculate pages
+          const pages = Math.ceil(count / channelsPerPage);
+          setFavoriteTotalPages(pages);
+          
+          // Get favorites for current page with abort signal
+          const favorites = await favoriteService.getFavoriteChannels(
+            selectedPlaylist.id,
+            favoriteCurrentPage,
+            channelsPerPage,
+            { signal: abortController.signal }
+          );
+          
+          if (abortController.signal.aborted) return;
+          
+          setFavoriteChannels(favorites);
+          setIsSearching(false);
+        } catch (error) {
+          if (!abortController.signal.aborted) {
+            console.error('Error loading favorites:', error);
+            setIsSearching(false);
+          }
+        }
+      };
+      
+      loadWithAbort();
       prevFavoriteCurrentPageRef.current = favoriteCurrentPage;
     }
-  }, [favoriteCurrentPage, selectedGroup, selectedPlaylist, loadFavoriteChannels]);
+    
+    // Cleanup function to abort any pending requests when dependencies change
+    return () => {
+      abortController.abort();
+    };
+  }, [favoriteCurrentPage, selectedGroup, selectedPlaylist, channelsPerPage]);
   
   // Effect to trigger search when initialSearchTerm is provided on component mount
   useEffect(() => {
+    // Create abort controller for this effect
+    const abortController = new AbortController();
+    
     if (initialSearchTerm && 
         initialSearchTerm.trim() && 
         selectedPlaylist?.id && 
@@ -287,9 +430,52 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
       setIsSearchMode(true);
       setIsSearching(true);
       setSearchCurrentPage(1); // Reset to first page
-      debouncedSearch(initialSearchTerm, selectedPlaylist.id, 0);
+      
+      // Modify the search function to include abort signal
+      const searchWithAbort = async () => {
+        try {
+          if (!initialSearchTerm.trim()) {
+            setIsSearchMode(false);
+            setSearchResults([]);
+            setIsSearching(false);
+            return;
+          }
+
+          // Search only within the current playlist with pagination
+          const { results, total } = await channelService.searchChannels(
+            initialSearchTerm, 
+            selectedPlaylist?.id, 
+            0, 
+            channelsPerPage,
+            { signal: abortController.signal }
+          );
+          
+          // Only update state if this is still the active search and not aborted
+          if (!abortController.signal.aborted) {
+            setSearchResults(results);
+            setSearchTotalResults(total);
+            
+            // Calculate total pages
+            const pages = Math.ceil(total / channelsPerPage);
+            setSearchTotalPages(pages);
+            setIsSearching(false);
+          }
+        } catch (error) {
+          if (!abortController.signal.aborted) {
+            console.error('Error performing search:', error);
+            setIsSearching(false);
+          }
+        }
+      };
+      
+      searchWithAbort();
     }
-  }, [initialSearchTerm, selectedPlaylist, debouncedSearch, isSearchMode]);
+    
+    // Cleanup function to abort any pending requests when dependencies change
+    return () => {
+      abortController.abort();
+    };
+  }, [initialSearchTerm, selectedPlaylist, isSearchMode, channelsPerPage]);
   
   // Determine which view to show
   const isFavoritesMode = selectedGroup === 'Favorites';

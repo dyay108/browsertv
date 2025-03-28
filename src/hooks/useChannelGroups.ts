@@ -149,6 +149,10 @@ export function useChannelGroups(
   
   // Load channels for the selected group with pagination
   useEffect(() => {
+    // Add AbortController for cancelling pending requests
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    
     if (selectedPlaylist && selectedGroup !== undefined) {
       const loadChannels = async () => {
         try {
@@ -166,7 +170,12 @@ export function useChannelGroups(
           // Handle different group selections
           if (selectedGroup === '__ALL_CHANNELS__') {
             // Get all channels for this playlist
-            channelsData = await channelService.getChannelsByPlaylist(playlistId, currentPage, channelsPerPage);
+            channelsData = await channelService.getChannelsByPlaylist(
+              playlistId, currentPage, channelsPerPage, { signal }
+            );
+            
+            // Check if request was aborted
+            if (signal.aborted) return;
             
             // Check if we got paginated results or just an array
             if ('items' in channelsData) {
@@ -181,7 +190,13 @@ export function useChannelGroups(
             // }
           } else if (selectedGroup === 'Favorites') {
             // Get favorite channels
-            const favoriteChannels = await favoriteService.getFavoriteChannels(playlistId, currentPage, channelsPerPage);
+            const favoriteChannels = await favoriteService.getFavoriteChannels(
+              playlistId, currentPage, channelsPerPage, { signal }
+            );
+            
+            // Check if request was aborted
+            if (signal.aborted) return;
+            
             setChannels(favoriteChannels);
             
             // For favorites, we might need to do an additional count query if the API doesn't return paginated results
@@ -190,12 +205,21 @@ export function useChannelGroups(
             setTotalPages(1); // This is also an approximation
           } else {
             // Find the group ID first
-            const groupsList = await groupService.getGroupsByPlaylist(playlistId);
+            const groupsList = await groupService.getGroupsByPlaylist(playlistId, { signal });
+            
+            // Check if request was aborted
+            if (signal.aborted) return;
+            
             const group = groupsList.find(g => g.name === selectedGroup);
             
             if (group) {
               // Get channels for this specific group
-              const groupChannels = await channelService.getChannelsByGroup(group.id, currentPage, channelsPerPage);
+              const groupChannels = await channelService.getChannelsByGroup(
+                group.id, currentPage, channelsPerPage, { signal }
+              );
+              
+              // Check if request was aborted
+              if (signal.aborted) return;
               
               // For groups, we might need to handle paginated results differently
               if (Array.isArray(groupChannels)) {
@@ -216,30 +240,50 @@ export function useChannelGroups(
             }
           }
   
-          setLoading(false);
+          if (!signal.aborted) {
+            setLoading(false);
+          }
         } catch (error) {
-          console.error('Error loading channels:', error);
-          setLoading(false);
+          if (!signal.aborted) {
+            console.error('Error loading channels:', error);
+            setLoading(false);
+          }
         }
       };
   
       loadChannels();
     }
+    
+    // Cleanup function to abort any pending requests when dependencies change
+    return () => {
+      abortController.abort();
+    };
   }, [selectedPlaylist, selectedGroup, currentPage, channelsPerPage]);
 
   // Load groups from PocketBase when playlist changes
   useEffect(() => {
+    // Add AbortController for cancelling pending requests
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    
     const loadGroupsForCurrentPlaylist = async () => {
       if (!selectedPlaylist?.id) return;
 
       setLoading(true);
       try {
         // Load groups from PocketBase
-        const groupEntities = await groupService.getGroupsByPlaylist(selectedPlaylist.id);
+        const groupEntities = await groupService.getGroupsByPlaylist(selectedPlaylist.id, { signal });
+        
+        // Check if the request was aborted
+        if (signal.aborted) return;
+        
         const groupNames = groupEntities.map(g => g.name);
 
         // Load group order from PocketBase
-        const savedOrder = await groupService.getGroupOrder(selectedPlaylist.id);
+        const savedOrder = await groupService.getGroupOrder(selectedPlaylist.id, { signal });
+        
+        // Check if the request was aborted
+        if (signal.aborted) return;
         
         // Determine the final group order
         let finalGroups: string[];
@@ -273,30 +317,58 @@ export function useChannelGroups(
         const counts: { [key: string]: number } = {};
         
         // Get all channels count first
-        const allChannelsData = await channelService.getChannelsByPlaylist(selectedPlaylist.id, 1, 1);
+        const allChannelsData = await channelService.getChannelsByPlaylist(
+          selectedPlaylist.id, 1, 1, { signal }
+        );
+        
+        // Check if the request was aborted
+        if (signal.aborted) return;
+        
         counts[""] = 'totalItems' in allChannelsData ? allChannelsData.totalItems : 0;
 
-        // This part can be expensive and might need optimization
-        for (const group of groupEntities) {
+        // Batch the requests for group channel counts to reduce network calls
+        const countPromises = groupEntities.map(async (group) => {
           try {
-            const groupChannels = await channelService.getChannelsByGroup(group.id);
-            counts[group.name] = groupChannels.totalItems//Array.isArray(groupChannels) ? groupChannels.length : 0;
+            if (signal.aborted) return null;
+            const groupChannels = await channelService.getChannelsByGroup(group.id, 1, 1, { signal });
+            return { name: group.name, count: groupChannels.totalItems };
           } catch (error) {
-            console.error(`Error getting count for group ${group.name}:`, error);
-            counts[group.name] = 0;
+            if (!signal.aborted) {
+              console.error(`Error getting count for group ${group.name}:`, error);
+            }
+            return { name: group.name, count: 0 };
           }
+        });
+        
+        // Wait for all count requests to complete
+        const groupCounts = await Promise.all(countPromises);
+        
+        // Process results if not aborted
+        if (!signal.aborted) {
+          groupCounts.forEach(result => {
+            if (result) {
+              counts[result.name] = result.count;
+            }
+          });
+          
+          setGroupChannelCounts(counts);
+          setLoading(false);
         }
-
-        setGroupChannelCounts(counts);
-        setLoading(false);
       } catch (error) {
-        console.error('Error loading groups for playlist:', error);
-        setLoading(false);
+        if (!signal.aborted) {
+          console.error('Error loading groups for playlist:', error);
+          setLoading(false);
+        }
       }
     };
 
     loadGroupsForCurrentPlaylist();
-  }, [selectedPlaylist, selectedGroup]);
+    
+    // Cleanup function to abort any pending requests when dependencies change
+    return () => {
+      abortController.abort();
+    };
+  }, [selectedPlaylist, selectedGroup, handleGroupSelect]);
 
   return {
     groups,
