@@ -122,6 +122,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
     }
   }, [src]);
   
+  // Ref to store the last successful method
+  const lastSuccessfulMethodRef = useRef<string | null>(null);
+
   // Main effect for player management - runs ONCE per mount
   useEffect(() => {
     console.log(`VideoPlayer MOUNTED, initializing player`);
@@ -244,7 +247,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
       // Initial method selection based on stream type and force flag
       let methods: string[];
       
-      // Always try all methods in sequence, regardless of force reconnect
+      // Generate base method array based on stream type
       if (streamType === 'hls') {
         methods = ['hls', 'videojs', 'mpegts', 'native'];
       } else if (streamType === 'mpegts') {
@@ -253,8 +256,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
         methods = ['native', 'videojs', 'hls', 'mpegts'];
       }
       
+      // If we have a lastSuccessfulMethod, prioritize it by moving it to the front
+      if (lastSuccessfulMethodRef.current) {
+        const lastMethod = lastSuccessfulMethodRef.current;
+        console.log(`Using last successful method as priority: ${lastMethod}`);
+        
+        // Remove the method from its current position
+        methods = methods.filter(m => m !== lastMethod);
+        
+        // Add it to the front of the array
+        methods.unshift(lastMethod);
+      }
+      
       // Try all methods in sequence with a small delay between attempts
-      console.log('Trying all methods in sequence, starting with:', methods[0]);
+      console.log('Trying methods in sequence, starting with:', methods[0]);
       
       // Reset success tracker for new sequence
       successRef.current = false;
@@ -270,6 +285,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
         const onPlaying = () => {
           console.log(`VIDEO PLAYING EVENT: ${method} is now playing!`);
           successRef.current = true;
+          
+          // Save this successful method for future stream changes
+          lastSuccessfulMethodRef.current = method;
+          console.log(`Saved ${method} as last successful method`);
           
           // Clean up event listeners
           if (videoElement.current) {
@@ -352,6 +371,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
             // This method is working, stop the sequence
             console.log(`Method ${currentMethodName} is successfully playing, stopping sequence`);
             successRef.current = true;
+            
+            // Save this successful method for future stream changes
+            lastSuccessfulMethodRef.current = currentMethodName;
+            console.log(`Saved ${currentMethodName} as last successful method`);
             return;
           }
           

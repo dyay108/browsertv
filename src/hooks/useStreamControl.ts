@@ -1,5 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 
+// Extend Window interface to include our custom properties
+declare global {
+  interface Window {
+    _streamSwitchTimeoutId?: number;
+    _loadingClearTimeoutId?: number;
+  }
+}
+
 interface StreamControlHookResult {
   currentStream: string;
   key: number;
@@ -38,16 +46,22 @@ export function useStreamControl(initialStream = ''): StreamControlHookResult {
     // Apply the stream URL immediately
     setCurrentStream(url);
     
+    // Cancel any prior unfinished playStream operations
+    if (window._streamSwitchTimeoutId) {
+      clearTimeout(window._streamSwitchTimeoutId);
+      clearTimeout(window._loadingClearTimeoutId);
+    }
+    
     // Then update key after a tiny delay to ensure state batching
-    setTimeout(() => {
+    window._streamSwitchTimeoutId = setTimeout(() => {
       setKey(newKey);
       
       // Clear loading states after the change is complete
-      setTimeout(() => {
+      window._loadingClearTimeoutId = setTimeout(() => {
         setLoading(false);
         console.log('Stream change completed');
-      }, 1500);
-    }, 10);
+      }, 2000); // Increased from 1500ms to 2000ms to give more time for stream to initialize
+    }, 100); // Increased from 10ms to 100ms for better stability during rapid changes
   }, []);
 
   // Retry current stream with cache-busting
@@ -67,10 +81,28 @@ export function useStreamControl(initialStream = ''): StreamControlHookResult {
       newUrl = `${newUrl}?_=${timestamp}`;
     }
 
-    // Update stream URL and force player component to remount
+    // Cancel any prior unfinished operations
+    if (window._streamSwitchTimeoutId) {
+      clearTimeout(window._streamSwitchTimeoutId);
+      clearTimeout(window._loadingClearTimeoutId);
+    }
+
+    // Update stream URL
     setCurrentStream(newUrl);
-    setKey(prevKey => prevKey + 1);
-    setLoading(false);
+    
+    // Generate a new key
+    const newKey = Date.now();
+    
+    // Update key after a delay to ensure proper state batching
+    window._streamSwitchTimeoutId = setTimeout(() => {
+      setKey(newKey);
+      
+      // Clear loading states after the change is complete
+      window._loadingClearTimeoutId = setTimeout(() => {
+        setLoading(false);
+        console.log('Retry stream complete');
+      }, 2000);
+    }, 100);
 
     console.log('Retrying stream with cache-busting:', newUrl);
   }, [currentStream]);
@@ -97,23 +129,35 @@ export function useStreamControl(initialStream = ''): StreamControlHookResult {
     const newKey = Date.now();
     console.log('Setting new player key:', newKey);
     
+    // Cancel any prior unfinished operations
+    if (window._streamSwitchTimeoutId) {
+      clearTimeout(window._streamSwitchTimeoutId);
+      clearTimeout(window._loadingClearTimeoutId);
+    }
+    
     // Apply URL change first
     setCurrentStream(freshUrl);
     
-    // Then update key after a tiny delay to ensure proper state batching
-    setTimeout(() => {
+    // Then update key after a delay to ensure proper state batching
+    window._streamSwitchTimeoutId = setTimeout(() => {
       setKey(newKey);
       
       // Clear loading states after the change is complete
-      setTimeout(() => {
+      window._loadingClearTimeoutId = setTimeout(() => {
         setLoading(false);
         console.log('Force reconnect complete');
-      }, 1500);
-    }, 10);
+      }, 2000); // Increased to 2000ms for consistency
+    }, 100); // Increased to 100ms for stability
   }, [currentStream]);
 
   // Clear the current stream
   const clearStream = useCallback(() => {
+    // Cancel any pending operations
+    if (window._streamSwitchTimeoutId) {
+      clearTimeout(window._streamSwitchTimeoutId);
+      clearTimeout(window._loadingClearTimeoutId);
+    }
+    
     setCurrentStream('');
     setKey(0);
     setLoading(false); // Reset loading state too
