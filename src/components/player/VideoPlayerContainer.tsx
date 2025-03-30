@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import VideoPlayer from '../VideoPlayer';
 import NowPlayingInfo from './NowPlayingInfo';
 import StreamControls from './StreamControls';
@@ -21,44 +21,74 @@ interface VideoPlayerContainerProps {
  */
 const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
   selectedChannel,
-  initialStreamUrl,
   isDirectStreamMode = false,
   isLoadingChannels,
   onReturnToMain,
   onShowSidebar,
   onChannelSelect
 }) => {
+
+  const [showSpinner, setShowSpinner] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null); // Type the ref for TypeScript
+  const delay = 300;
   // Use custom hooks for stream control and UI visibility
-  const { 
-    currentStream, 
-    key, 
-    loading, 
-    retryStream, 
-    forceReconnect, 
+  const {
+    currentStream,
+    key,
+    loading,
+    retryStream,
+    forceReconnect,
     clearStream: clearStreamHook,
     // setCurrentStream 
   } = useSharedStreamControl();
-  
+
+  const isActuallyLoading = (isLoadingChannels && !isDirectStreamMode) || loading;
+
+  useEffect(() => {
+    // Clear any existing timeout when the loading state changes or component re-renders
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    if (isActuallyLoading) {
+      // If we are loading, set a timeout to show the spinner after the delay
+      timeoutRef.current = setTimeout(() => {
+        setShowSpinner(true); // Show the spinner after 'delay'
+      }, delay);
+    } else {
+      // If loading is finished, immediately hide the spinner
+      setShowSpinner(false);
+    }
+
+    // Cleanup function: Clear the timeout if the component unmounts
+    // or if the dependencies change before the timeout fires.
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [isActuallyLoading, delay]);
+
   // Enhanced clear stream function that also clears the selected channel
   const clearStream = useCallback(() => {
     clearStreamHook(); // Clear stream in the hook
-    
+
     // If in direct stream mode and we have onReturnToMain, go back to main view
     if (isDirectStreamMode && onReturnToMain) {
       onReturnToMain();
-    } 
+    }
     // Otherwise, clear the selected channel and show the sidebar
     else {
       // Clear selected channel if we have a way to communicate this
       if (typeof onChannelSelect === 'function') {
         onChannelSelect(null); // Set selected channel to null
       }
-      
+
       // Show the sidebar for channel selection
       typeof onShowSidebar === 'function' && onShowSidebar();
     }
   }, [clearStreamHook, onReturnToMain, isDirectStreamMode, onShowSidebar, onChannelSelect]);
-  
+
   const {
     controlsVisible,
     nowPlayingVisible,
@@ -70,9 +100,9 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
   useEffect(() => {
     console.log('VideoPlayerContainer MOUNTED');
     return () => {
-      console.log('VideoPlayerContainer UNMOUNTING, state:', { 
-        hasCurrentStream: !!currentStream, 
-        key, 
+      console.log('VideoPlayerContainer UNMOUNTING, state:', {
+        hasCurrentStream: !!currentStream,
+        key,
         loading
       });
     };
@@ -82,18 +112,18 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
   useEffect(() => {
     if (currentStream) {
       console.log('Setting up UI control for stream:', currentStream);
-      
+
       // Initial hide after mount
       hideUIElementsWithDelay();
-      
+
       // Add mouse movement event to show controls temporarily
       const handleMouseMove = () => {
         showUIElements();
       };
-      
+
       // Add event listener
       window.addEventListener('mousemove', handleMouseMove);
-      
+
       // Cleanup
       return () => {
         window.removeEventListener('mousemove', handleMouseMove);
@@ -104,16 +134,16 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
   return (
     <div className="player-fullscreen">
       {/* Loading overlay - show during load */}
-      {(isLoadingChannels && !isDirectStreamMode) || loading  ? (
+      {showSpinner ? (
         <div className="loading-overlay">
           <div className="loading-spinner"></div>
           <p>
             {isLoadingChannels ? "Loading Channels..." :
-             "Loading Stream..."}
+              "Loading Stream..."}
           </p>
         </div>
       ) : null}
-      
+
       {(currentStream) ? (
         <div className="player-container">
           {selectedChannel && !isDirectStreamMode && (
@@ -138,7 +168,7 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
             loading={loading}
           />
         </div>
-      ) : (
+      ) : (!showSpinner && (
         <div className="no-player-message">
           Select a channel from the list to start watching
           <div className="no-player-buttons">
@@ -168,7 +198,7 @@ const VideoPlayerContainer: React.FC<VideoPlayerContainerProps> = ({
               </button>
             )}
           </div>
-        </div>
+        </div>)
       )}
     </div>
   );
