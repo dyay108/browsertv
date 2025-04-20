@@ -266,7 +266,7 @@ export function usePlayerManager(src: string): PlayerManagerResult {
         
         // Try next method if current one failed
         attemptNextMethod(index + 1);
-      }, 4000); // Slightly longer timeout to give more chance to detect playback
+      }, 20000); // Slightly longer timeout to give more chance to detect playback
     };
     
     // Start with the first method
